@@ -1,0 +1,565 @@
+#### 0. Load R packages ####
+library(rgl)
+library(geomorph)
+library(devtools)
+install_github("marta-vidalgarcia/morpho.tools.GM")
+library(morpho.tools.GM)
+library(Morpho)
+library(Rvcg)
+library(magick)
+library(Evomorph)
+library(ggplot2)
+library(vegan)
+install_github("vqv/ggbiplot")
+library(ggbiplot)
+library(factoextra)
+library(gt)
+
+# setwd("~/Documents/GITHUB_repos/FGFR-Branches-GM/")
+
+
+#### 1. LOAD LM DATA & CLASSIFIERS ####
+
+
+#### 2. GM ANALYSES EMBRYO FACES ####
+# 1. Import all fcsv files into separate arrays (all specimens for east LM set)
+?morpho.tools.GM::fcsv2array
+setwd("./data/Landmarks/")
+dir()
+LMs <- fcsv2array(string_del = "_Fiducials")
+# MVG - make an option to import markup fcsv instead of regurlar fcsv
+
+
+# 2. Combine all arrays into a single one, in a particular order that makes sense for our GMM
+?abind
+
+head_array <- 
+
+# 3. Generate a curveslide file for the GPA that tells us how the curve semis have to slide (constrained)
+
+curveslide_head <- 
+  
+# 4. Write down the order within the combined array of the surface semis
+head_fixed.lm <- c(1:dim(LMs)[1])
+head_curves.lm <- 
+head_surface.lm <- 
+  
+# with all of these steps we can then run a GPA
+
+
+
+str(head_array)
+GPA_head <- geomorph::gpagen(A = head_array, curves = as.matrix(curveslide_head), surfaces = head_surface.lm)
+
+str(GPA_head)
+
+plotOutliers_percentile(A = GPA_head$coords, percentile = 0.99, save.plot = FALSE)
+
+
+# For the atlas we are going to: (1) perform a GPA, (2) find the specimens the closest to the center of the morphospace
+# Pdist <- ShapeDist(GPA_head$coords, GPA_head$consensus)
+# find who it is
+
+
+
+#### 3. ATLAS HEAD & PLOTS ####
+# (hypervolume) - which means the smalles Procrustes distance, (3) use the set of LMs & mesh of that specimen
+head_mesh <- geomorph::read.ply("./data/atlas/Calgary_Adult_Cranium_Atlas_DS_ascii.ply") # Not sure what is wrong with this mesh
+head_mesh <- geomorph::read.ply("./data/atlas/Global_Adult_ONLY_Skull_Atlas_lowres.ply") # I cleaned and smoothed this one manually, looks good
+head_lowres <- vcgQEdecim(head_mesh, percent = 0.15)
+atlas_head_lm <- 
+  
+# Divide the data into type of landmark (we did that before)
+head_fixed.lm
+head_curves.lm
+head_surface.lm
+
+
+# Plot the mesh with the landmarks, curve semi-landmarks, and surface semi-landmarks
+open3d(zoom = 0.75, windowRect = c(0, 0, 700, 700)) # bigger rgl window
+shade3d(head_lowres, color = "gray", alpha = 0.8) # alpha for transparency
+
+lateral <- par3d()$userMatrix
+frontal <- par3d()$userMatrix
+rgl.close()
+
+save(lateral, frontal, file = "./data/atlas/RGL_head_pos.rdata")
+
+
+load("./data/atlas/RGL_head_pos.rdata")
+
+# Lateral view
+open3d(zoom = 0.75, userMatrix = lateral, windowRect = c(0, 0, 1000, 700)) 
+rgl::shade3d(head_mesh, color = "gray", alpha =0.9)
+rgl::plot3d(atlas_head_lm[head_fixed.lm,], aspect = "iso", type = "s", size=1.2, col = "darkblue", add = T)
+# rgl::text3d(x = atlas_head_lm[head_fixed.lm, 1], 
+#             y = atlas_head_lm[head_fixed.lm, 2], 
+#             z=  atlas_head_lm[head_fixed.lm, 3], 
+#             texts = row.names(atlas_head_lm[head_fixed.lm, ]), 
+#             cex = 1.5, offset = 0.5, pos = 3)
+rgl::plot3d(atlas_head_lm[head_curves.lm,], aspect = "iso", type = "s", size=0.75, col = "orange", add = T)
+rgl::plot3d(atlas_head_lm[head_surface.lm,], aspect = "iso", type = "s", size=0.6, col = "turquoise2", add = T)
+rgl::rgl.snapshot("./figs/head_LM_lateral.png", top = TRUE)
+rgl::rgl.close()
+
+# Frontal view
+open3d(zoom = 0.75, userMatrix = frontal, windowRect = c(0, 0, 1000, 700)) 
+rgl::shade3d(head_mesh, color = "gray", alpha =0.9)
+rgl::plot3d(atlas_head_lm[head_fixed.lm,], aspect = "iso", type = "s", size=1.2, col = "darkblue", add = T)
+rgl::plot3d(atlas_head_lm[head_curves.lm,], aspect = "iso", type = "s", size=0.75, col = "orange", add = T)
+rgl::plot3d(atlas_head_lm[head_surface.lm,], aspect = "iso", type = "s", size=0.6, col = "turquoise2", add = T)
+rgl::rgl.snapshot("./figs/head_LM_frontal.png", top = TRUE)
+rgl::rgl.close()
+
+# Combine the two views
+side_lm <- image_read("./figs/head_LM_lateral.png")
+side_lm <- image_annotate(side_lm, "Lateral", font = "times", location = "+80+120", size = 50)
+side_lm <- image_crop(side_lm, "1000x500+0+90")
+side_lm
+
+frontal_lm <- image_read("./figs/head_LM_frontal.png")
+frontal_lm <- image_annotate(frontal_lm, "Frontal", font = "times", location = "+80+120", size = 50)
+frontal_lm <- image_crop(frontal_lm, "1000x500+0+90")
+frontal_lm
+
+stack_views <- c(side_lm, frontal_lm)
+stacked_images <- image_append(image_scale(stack_views), stack = TRUE)
+
+image_browse(stacked_images)
+image_write(stacked_images, path = "./figs/LM_scheme_all_views.png", format = "png")
+
+
+#### 4. PCA plots HEAD ####
+PCA_head <- gm.prcomp(GPA_head$coords)
+summary(PCA_head)
+str(PCA_head)
+
+cat("PCA shape variables raw", capture.output(summary(PCA_head)), 
+    file="./output/PCA_head_shape_coords.txt", sep="\n", append=TRUE)
+
+# # Make a different table to get HTML table (or latex)
+# eigenvalues <- round(PCA_head$d, digits = 5)
+# prop_var <- round(PCA_head$d*100/sum(PCA_head$d), digits = 3)
+# cumul_var <- round(cumsum(PCA_head$d)*100/sum(PCA_head$d), digits = 3)
+# 
+# 
+# PCA_head_summary <- as.data.frame(rbind(eigenvalues, prop_var, cumul_var))
+# colnames(PCA_head_summary) <- paste0(rep("PC", length(colnames(PCA_head_summary))),
+#                                       c(1:length(colnames(PCA_head_summary))))
+# PCA_head_summary <- as.data.frame(cbind(c("Eigenvalues", "Proportion of Variance (%)",
+#                                            "Cumulative Variance (%)"), PCA_head_summary))
+# colnames(PCA_head_summary)[1] <- c(" ")
+# 
+# PCA_summary_table <- PCA_head_summary %>%
+#   gt() %>%
+#   tab_header("Principal Component Analysis - Skull")
+# 
+# ?gtsave
+# gtsave(PCA_summary_table, "./figs/PCA_head_summary.html")
+
+
+levels(classifiers$treatment)
+palette(c("navy", "darkorange"))
+classifiers$treatment <- as.character(classifiers$treatment)
+classifiers$treatment <- as.factor(classifiers$treatment)
+
+# png("./figs/PCA_head_shape_treatment_raw.png", width = 750, height = 600)
+pdf("./figs/PCA_head_shape_treatment_raw.pdf", width = 8.25, height = 6)
+plot(PCA_head, pch = 19, col = classifiers$treatment, cex = 1.25)
+ordiellipse(PCA_head, classifiers$treatment, kind="sd",conf=0.95, col = palette(),
+            draw = "polygon", alpha = 0.2, lty = 0)
+legend("topright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
+title("PCA of shape coordinates - RASOPATHY P34R+ vs P34R-")
+dev.off()
+
+
+# PC1 - PC4
+png("./figs/PCA_head_treatment_PC1-4.png", width = 750, height = 1200)
+pdf("./figs/PCA_head_treatment_PC1-4.pdf", width = 8, height = 12)
+par(mfrow=c(3,2))
+plot(PCA_head, pch = 19, axis1 = 1, axis2 = 2, col = classifiers$treatment, cex = 1.25)
+ordiellipse(PCA_head, classifiers$treatment, kind="sd",conf=0.95, col = palette(),
+            draw = "polygon", alpha = 0.2, lty = 0)
+legend("topright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
+title("PC1 ~ PC2")
+
+plot(PCA_head, pch = 19, axis1 = 1, axis2 = 3, col = classifiers$treatment, cex = 1.25)
+ordiellipse(PCA_head$x[,c(1,3)], classifiers$treatment, kind="sd",conf=0.95, col = palette(),
+            draw = "polygon", alpha = 0.2, lty = 0)
+legend("topright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
+title("PC1 ~ PC3")
+
+plot(PCA_head, pch = 19, axis1 = 1, axis2 = 4, col = classifiers$treatment, cex = 1.25)
+ordiellipse(PCA_head$x[,c(1, 4)], classifiers$treatment, kind="sd",conf=0.95, col = palette(),
+            draw = "polygon", alpha = 0.2, lty = 0)
+legend("topright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
+title("PC1 ~ PC4")
+
+plot(PCA_head, pch = 19, axis1 = 2, axis2 = 3, col = classifiers$treatment, cex = 1.25)
+ordiellipse(PCA_head$x[,c(2,3)], classifiers$treatment, kind="sd",conf=0.95, col = palette(),
+            draw = "polygon", alpha = 0.2, lty = 0)
+legend("bottomleft", pch = 19, col = palette(), legend = levels(classifiers$treatment))
+title("PC2 ~ PC3")
+
+plot(PCA_head, pch = 19, axis1 = 2, axis2 = 4, col = classifiers$treatment, cex = 1.25)
+ordiellipse(PCA_head$x[,c(2,4)], classifiers$treatment, kind="sd",conf=0.95, col = palette(),
+            draw = "polygon", alpha = 0.2, lty = 0)
+legend("topright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
+title("PC2 ~ PC4")
+
+plot(PCA_head, pch = 19, axis1 = 3, axis2 = 4, col = classifiers$treatment, cex = 1.25)
+ordiellipse(PCA_head$x[,3:4], classifiers$treatment, kind="sd",conf=0.95, col = palette(),
+            draw = "polygon", alpha = 0.2, lty = 0)
+legend("topright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
+title("PC3 ~ PC4")
+
+dev.off()
+
+par(mfrow=c(1,1))
+
+PCA_comp <- PCA_head
+class(PCA_comp) <- "princomp"
+
+pdf("./figs/PCA_head_shape_scree_plot.pdf", height = 5, width = 5)
+pca_scree <- fviz_eig(PCA_comp, addlabels=TRUE, hjust = -0.3,
+                      barfill="darkgrey", barcolor ="black",
+                      linecolor ="blue") + ylim(0, 85) + 
+  theme_classic()
+
+print(pca_scree)
+dev.off()
+
+#### 5. BOXPLOTS HEAD ####
+
+Pdist <- ShapeDist(GPA_head$coords, GPA_head$consensus)
+
+gdf_head <- geomorph.data.frame(GPA_head, treatment = classifiers$treatment, Pdist = Pdist, sex = classifiers$Sex)
+
+
+ggplot_df <- as.data.frame(cbind(as.character(gdf_head$Csize), 
+                                 as.character(gdf_head$treatment), 
+                                 as.character(gdf_head$Pdist)))
+colnames(ggplot_df) <- c("Csize", "treatment", "Pdist")
+
+row.names(ggplot_df) <- dimnames(gdf_head$coords)[[3]]
+
+head(ggplot_df)
+
+ggplot_df$treatment <- as.factor(ggplot_df$treatment)
+ggplot_df$Csize <- as.numeric(as.character(ggplot_df$Csize))
+ggplot_df$Pdist <- as.numeric(as.character(ggplot_df$Pdist))
+
+str(ggplot_df)
+log(ggplot_df$Csize)
+
+pdf("./figs/Csize_boxplot_HEAD.pdf", width = 6.5, height = 6.5)
+ggplot(ggplot_df, aes(x=treatment, y=log(Csize), fill=treatment)) + 
+  geom_boxplot(alpha = 0.7) +
+  scale_fill_manual(values = c("navy", "darkorange")) +
+  geom_jitter(width = 0.1, size = 1.25) +
+  theme(plot.title = element_text(size = 20, face = "bold"), axis.text.x = element_text(size = 15),
+        axis.title = element_text(size = 18, face = "bold"), legend.text=element_text(size=12), 
+        legend.title=element_text(size=15, face = "bold"))
+dev.off()
+
+
+pdf("./figs/Pdist_treatment.pdf_HEAD", width = 6.5, height = 6.5)
+ggplot(ggplot_df, aes(Pdist, fill = treatment)) +
+  scale_fill_manual(values=c("navy", "darkorange")) + geom_density(alpha = 0.65) + 
+  ggtitle("Procrustes distances head shape") + xlab("Procrustes distance") + ylab("Relative density") +
+  theme(plot.title = element_text(size = 15, face = "bold"), axis.text.x = element_text(size = 10),
+        axis.title = element_text(size = 12, face = "bold"), legend.text=element_text(size=10), 
+        legend.title=element_text(size=12, face = "bold"))
+dev.off()
+
+#### 6. ANOVAs & ALLOMETRY - HEAD ####
+
+allometry_all <- procD.lm(coords ~ Csize, data = gdf_head, iter = 999, RRPP = TRUE)
+summary(allometry_all)
+cat("Allometry (coords ~ Csize)", capture.output(summary(allometry_all)), 
+    file="./output/HEAD_allometry_all.txt", sep="\n", append=TRUE)
+
+shape_residuals <- allometry_all$residuals # let's save this for later. We will run a PCA again on the residuals
+write.csv(shape_residuals, "./output/HEAD_shape_residuals.csv")
+
+allometry_treatment <- procD.lm(coords ~ Csize * treatment, data = gdf_head, iter = 999, RRPP = TRUE)
+summary(allometry_treatment)
+cat("Allometry * treatment (coords ~ Csize * treatment)", capture.output(summary(allometry_treatment)), 
+    file="./output/HEAD_allometry_treatment.txt", sep="\n", append=TRUE)
+
+
+# ANOVA treatment
+treatment <- procD.lm(coords ~ treatment, data = gdf_head, RRPP = TRUE)
+summary(treatment)
+cat("ANOVA shape - treatment (coords ~ treatment)", capture.output(summary(treatment)), 
+    file="./output/ANOVA_HEAD_shape_treatment.txt", sep="\n", append=TRUE)
+
+
+one_way <- aov(log(gdf_head$Csize) ~ gdf_head$treatment)
+summary(one_way)
+cat("ANOVA Csize - treatment (Csize ~ treatment)", capture.output(summary(one_way)), 
+    file="./output/ANOVA_HEAD_Csize_treatment.txt", sep="\n", append=TRUE)
+
+#### 7. HEATMAPS - HEAD ####
+#### 7.1. HEAD HEATMAPS group means ####
+
+gdf_head$treatment
+
+who_is_MUT <- which(gdf_head$treatment == "P34R+") # I think?
+MUT_coords <- gdf_head$coords[,,who_is_MUT]
+dim(MUT_coords)
+
+CTRL_coords <- gdf_head$coords[,,-who_is_MUT]
+dim(CTRL_coords)
+
+dim(gdf_head$coords)
+# we are going to calculate the mean shape on the shape coordinates. Everything will be in Procrustes dist.
+
+MUT_mean_shape <- mshape(MUT_coords)
+
+CTRL_mean_shape <- mshape(CTRL_coords)
+str(CTRL_mean_shape)
+
+MUT_mesh <- tps3d(head_mesh, as.matrix(atlas_head_lm[head_fixed.lm,]), MUT_mean_shape[head_fixed.lm,], threads = 1)
+CTRL_mesh <- tps3d(head_mesh, as.matrix(atlas_head_lm[head_fixed.lm,]), CTRL_mean_shape[head_fixed.lm,], threads = 1)
+
+open3d(zoom=0.75, windowRect = c(0,0, 1000, 700), userMatrix = lateral)
+meshDist(CTRL_mesh, MUT_mesh, rampcolors = c("blue", "white", "red"), sign = TRUE)
+# Not worth saving, no differences
+
+# rgl.snapshot("./figs/Heatmap_CTRL_MUT_lateral.png", top = TRUE)
+# rgl.snapshot("./figs/Heatmap_CTRL_MUT_frontal.png", top = TRUE)
+
+writeWebGL(dir = "webGL", filename = file.path("./figs/Heatmap_CTRL_MUT_Skull.html"),
+           template = system.file(file.path("WebGL", "template.html"), package = "rgl"),
+           snapshot = TRUE, width = 1000, height = 700)
+
+
+open3d(zoom=1, userMatrix = lateral, windowRect = c(0,0,1000,700)) 
+shade3d(MUT_mesh, color="gray", alpha=0.9)
+
+writePLY("./output/MUT_mesh_HEAD.ply")
+rgl.close()
+
+load("./figs/RGL_head_heatmaps_pos.rdata")
+open3d(zoom=1, userMatrix = lateral, windowRect = c(0,0,1000,700)) 
+shade3d(MUT_mesh, color="gray", alpha=0.9)
+rgl.snapshot("./figs/Morph_MUT_lateral_HEAD.png", top = TRUE)
+open3d(zoom=1, userMatrix = frontal, windowRect = c(0,0,1000,700)) 
+shade3d(MUT_mesh, color="gray", alpha=0.9)
+rgl.snapshot("./figs/Morph_MUT_frontal_HEAD.png", top = TRUE)
+open3d(zoom=1, userMatrix = ventral, windowRect = c(0,0,1000,700)) 
+shade3d(MUT_mesh, color="gray", alpha=0.9)
+rgl.snapshot("./figs/Morph_MUT_ventral_HEAD.png", top = TRUE)
+
+
+open3d(zoom=1, userMatrix = lateral, windowRect = c(0,0,1000,700)) 
+shade3d(CTRL_mesh, color = "gray", alpha=0.9)
+writePLY("./output/CTRL_mesh.ply")
+rgl.close()
+
+
+open3d(zoom=1, userMatrix = lateral, windowRect = c(0,0,1000,700)) 
+shade3d(CTRL_mesh, color="gray", alpha=0.9)
+rgl.snapshot("./figs/Morph_CTRL_lateral_HEAD.png", top = TRUE)
+open3d(zoom=1, userMatrix = frontal, windowRect = c(0,0,1000,700)) 
+shade3d(CTRL_mesh, color="gray", alpha=0.9)
+rgl.snapshot("./figs/Morph_CTRL_frontal.png", top = TRUE)
+open3d(zoom=1, userMatrix = ventral, windowRect = c(0,0,1000,700)) 
+shade3d(CTRL_mesh, color="gray", alpha=0.9)
+rgl.snapshot("./figs/Morph_CTRL_ventral.png", top = TRUE)
+
+
+
+#### 7. HEATMAPS - PC1-10 (89.4% overall variance) ####
+
+PC_min <- tps3d(head_mesh, as.matrix(atlas_head_lm[head_fixed.lm,]), 
+                PCA_head$shapes[[1]]$min[head_fixed.lm,], threads = 1)
+open3d(zoom=0.75, userMatrix = frontal, windowRect= c(0,0,1000,700))
+shade3d(PC_min, color="grey")
+
+PC_max <- tps3d(head_mesh, as.matrix(atlas_head_lm[head_fixed.lm,]), 
+                PCA_head$shapes[[1]]$max[head_fixed.lm,], threads = 1)
+open3d(zoom=0.75, userMatrix = ventral, windowRect= c(0,0,1000,700))
+shade3d(PC_max, color="grey")
+
+
+lateral <- par3d()$userMatrix
+frontal <- par3d()$userMatrix
+ventral <- par3d()$userMatrix
+rgl.close()
+
+save(lateral, frontal, ventral, file = "./figs/RGL_head_heatmaps_pos.rdata")
+
+
+n_dimensions <- 10 # number of PCs to include in the figure
+# Look how many dimensions makes sense to include, either 10 PCs or however as many to get to 95% of shape variance
+
+load("./figs/RGL_head_heatmaps_pos.rdata")
+
+
+# This loop automatically positions faces in frontal, ventral, and lateral views.
+for (i in 1:n_dimensions){
+  PC_min <- tps3d(head_mesh, as.matrix(atlas_head_lm), PCA_head$shapes[[i]]$min, threads = 1)
+  PC_max <- tps3d(head_mesh, as.matrix(atlas_head_lm), PCA_head$shapes[[i]]$max, threads = 1)
+  PC <- paste0("PC", i)
+  #frontal views
+  open3d(zoom=0.75, userMatrix = frontal, windowRect= c(0,0,1000,700))
+  shade3d(PC_max, color="grey")
+  rgl.snapshot(paste0("./figs/pc_morphs/head/",PC,"_","max_frontal.png"), top = TRUE )
+  clear3d()
+  rgl.close()
+  
+  #ventral views
+  open3d(zoom=0.75, userMatrix = ventral, windowRect= c(0,0,1000,700))
+  shade3d(PC_max, color="grey")
+  rgl.snapshot(paste0("./figs/pc_morphs/head/",PC,"_","max_ventral.png"), top = TRUE )
+  clear3d()
+  rgl.close()
+  
+  #lateral views
+  open3d(zoom=0.75, userMatrix = lateral, windowRect= c(0,0,1000,700)) 
+  shade3d(PC_max, color="grey")
+  rgl.snapshot(paste0("./figs/pc_morphs/head/",PC,"_","max_lateral.png"), top = TRUE )
+  clear3d()
+  rgl.close()
+  
+  #frontal views
+  open3d(zoom=0.75, userMatrix = frontal, windowRect= c(0,0,1000,700))
+  shade3d(PC_min, color="grey")
+  rgl.snapshot(paste0("./figs/pc_morphs/head/",PC,"_","min_frontal.png"), top = TRUE )
+  clear3d()
+  rgl.close()
+  
+  #ventral views
+  open3d(zoom=0.75, userMatrix = ventral, windowRect= c(0,0,1000,700))
+  shade3d(PC_min, color="grey")
+  rgl.snapshot(paste0("./figs/pc_morphs/head/",PC,"_","min_ventral.png"), top = TRUE )
+  clear3d()
+  rgl.close()
+  
+  #lateral views
+  open3d(zoom=0.75, userMatrix = lateral, windowRect= c(0,0,1000,700)) 
+  shade3d(PC_min, color="grey")
+  rgl.snapshot(paste0("./figs/pc_morphs/head/",PC,"_","min_lateral.png"), top = TRUE )
+  clear3d()
+  rgl.close()
+  
+  #Heatmaps
+  open3d(zoom=0.75, userMatrix = frontal, windowRect= c(0,0,1000,700))
+  meshDist(PC_max, PC_min, rampcolors = c("blue", "white", "red"), sign = TRUE)
+  rgl.snapshot(paste0("./figs/pc_morphs/head/heat_",PC,"_","frontal.png"), top = TRUE )
+  clear3d()
+  rgl.close()
+  
+  open3d(zoom=0.75, userMatrix = ventral, windowRect= c(0,0,1000,700))
+  meshDist(PC_max, PC_min, rampcolors = c("blue", "white", "red"), sign = TRUE)
+  rgl.snapshot(paste0("./figs/pc_morphs/head/heat_",PC,"_","ventral.png"), top = TRUE )
+  clear3d()
+  rgl.close()
+  
+  open3d(zoom=0.75, userMatrix = lateral, windowRect= c(0,0,1000,700))
+  x11(width=1.7, height=8)
+  meshDist(PC_max, PC_min, rampcolors = c("blue", "white", "red"), sign = TRUE)
+  rgl.snapshot(paste0("./figs/pc_morphs/head/heat_",PC,"_","lateral.png"), top = TRUE)
+  # dev.copy(pdf, paste0("./figs/pc_morphs/head/heat_",PC,"_scale.pdf"), width=2, height=9.5)
+  dev.print(pdf, paste0("./figs/pc_morphs/head/heat_",PC,"_scale.pdf"), width=2, height=9.5)
+  dev.off(dev.prev())
+  dev.off()
+  clear3d()
+  rgl.close()
+  
+  rm(PC_max, PC_min, PC) 
+}
+#END LOOP
+
+
+
+
+
+#Create page with PCs
+i <- 1
+PC_min_img_sup<- image_read(paste0("./figs/pc_morphs/head/PC",i,"_min_frontal.png"))
+PC_max_img_sup<- image_read(paste0("./figs/pc_morphs/head/PC",i,"_max_frontal.png"))
+PC_min_img_sd<- image_read(paste0("./figs/pc_morphs/head/PC",i,"_min_lateral.png"))
+PC_max_img_sd<- image_read(paste0("./figs/pc_morphs/head/PC",i,"_max_lateral.png"))
+PC_min_img_inf<- image_read(paste0("./figs/pc_morphs/head/PC",i,"_min_ventral.png"))
+PC_max_img_inf<- image_read(paste0("./figs/pc_morphs/head/PC",i,"_max_ventral.png"))
+PC_HT_img_sup<- image_read(paste0("./figs/pc_morphs/head/heat_PC",i,"_frontal.png"))
+PC_HT_img_sd<- image_read(paste0("./figs/pc_morphs/head/heat_PC",i,"_lateral.png"))
+PC_HT_img_inf<- image_read(paste0("./figs/pc_morphs/head/heat_PC",i,"_ventral.png"))
+
+PC_col <- c(PC_min_img_sup,PC_max_img_sup,PC_min_img_inf,PC_max_img_inf,PC_min_img_sd,PC_max_img_sd,PC_HT_img_sup,PC_HT_img_inf,PC_HT_img_sd)
+
+imgs <- image_append(image_scale(PC_col, "x200"), stack = TRUE)
+imgs <- image_border(imgs, "white", "0x15")
+imgs <- image_annotate(imgs, paste0("PC",i), font = "Times",
+                       location = "+100+0", size = 60)
+# imgs <- image_border(imgs, "white", "85x15")
+# imgs <- image_annotate(imgs, paste0("PC",i), font = "Times", 
+#                        location = "+195+0", size = 60)
+# imgs <- image_annotate(imgs, paste0("PCmin"), font = "Times", 
+#                        location = "+0+95", size = 32)
+# imgs <- image_annotate(imgs, paste0("PCmax"), font = "Times", 
+#                        location = "+0+295", size = 32)
+# imgs <- image_annotate(imgs, paste0("PCmin"), font = "Times", 
+#                        location = "+0+495", size = 32)
+# imgs <- image_annotate(imgs, paste0("PCmax"), font = "Times", 
+#                        location = "+0+695", size = 32)
+# imgs <- image_annotate(imgs, paste0("PCmin"), font = "Times", 
+#                        location = "+0+895", size = 32)
+# imgs <- image_annotate(imgs, paste0("PCmax"), font = "Times", 
+#                        location = "+0+1095", size = 32)
+# imgs <- image_annotate(imgs, paste0("Heatmap"), font = "Times", 
+#                        location = "+0+1295", size = 32)
+# imgs <- image_annotate(imgs, paste0("Heatmap"), font = "Times", 
+#                        location = "+0+1495", size = 32)
+# imgs <- image_annotate(imgs, paste0("Heatmap"), font = "Times", 
+#                        location = "+0+1705", size = 32)
+
+image_browse(imgs)
+
+for (i in 2:n_dimensions){
+  PC_min_img_sup<- image_read(paste0("./figs/pc_morphs/head/PC",i,"_min_frontal.png"))
+  PC_max_img_sup<- image_read(paste0("./figs/pc_morphs/head/PC",i,"_max_frontal.png"))
+  PC_min_img_sd<- image_read(paste0("./figs/pc_morphs/head/PC",i,"_min_lateral.png"))
+  PC_max_img_sd<- image_read(paste0("./figs/pc_morphs/head/PC",i,"_max_lateral.png"))
+  PC_min_img_inf<- image_read(paste0("./figs/pc_morphs/head/PC",i,"_min_ventral.png"))
+  PC_max_img_inf<- image_read(paste0("./figs/pc_morphs/head/PC",i,"_max_ventral.png"))
+  PC_HT_img_sup<- image_read(paste0("./figs/pc_morphs/head/heat_PC",i,"_frontal.png"))
+  PC_HT_img_sd<- image_read(paste0("./figs/pc_morphs/head/heat_PC",i,"_lateral.png"))
+  PC_HT_img_inf<- image_read(paste0("./figs/pc_morphs/head/heat_PC",i,"_ventral.png"))
+  
+  
+  PC_row <- c(PC_min_img_sup,PC_max_img_sup,PC_min_img_inf,PC_max_img_inf,PC_min_img_sd,PC_max_img_sd,PC_HT_img_sup,PC_HT_img_inf,PC_HT_img_sd)
+  img2<-image_append(image_scale(PC_row, "x200"), stack = TRUE)
+  img2<-image_border(img2, "white", "0x15")
+  img2<-image_annotate(img2, paste0("PC",i), font = "Times", 
+                       location = "+100+0", size = 60)
+  
+  imgs<-c(imgs,img2)
+  
+  imgs<-image_append(image_scale(imgs))
+}
+
+i
+
+image_browse(imgs)
+image_write(imgs, path = paste0("./figs/pc_morphs/HEAD_SHAPE_heatmap_morphs_PC1-", i, ".png"), format = "png")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
