@@ -1,9 +1,12 @@
 #### 0. Load R packages ####
+# install.packages(c('rgl', 'geomorph' 'devtools', 'Morpho', 'Rvcg', 'magick', 'Evomorph', 'ggplot2', 'vegan', 'factoextra', 'gt'))
 library(rgl)
 library(geomorph)
 library(devtools)
-install_github("marta-vidalgarcia/morpho.tools.GM")
+install_github("marta-vidalgarcia/morpho.tools.GM", force = TRUE)
 library(morpho.tools.GM)
+install_github("marta-vidalgarcia/mesh_process", force = TRUE)
+library(mesh_process)
 library(Morpho)
 library(Rvcg)
 library(magick)
@@ -14,30 +17,117 @@ install_github("vqv/ggbiplot")
 library(ggbiplot)
 library(factoextra)
 library(gt)
+library(abind)
 
 # setwd("~/Documents/GITHUB_repos/FGFR-Branches-GM/")
 
 
 #### 1. LOAD LM DATA & CLASSIFIERS ####
+classifiers_unord  <- read.csv("./data/classifiers.csv", header = TRUE)
+head(classifiers_unord)
+tail(classifiers_unord)
 
+str(classifiers_unord)
+classifiers_unord$treatment <- as.factor(classifiers_unord$treatment)
+row.names(classifiers_unord) <- classifiers_unord$id
+classifiers_unord
 
 #### 2. GM ANALYSES EMBRYO FACES ####
 # 1. Import all fcsv files into separate arrays (all specimens for east LM set)
 ?morpho.tools.GM::fcsv2array
+
+# LANDMARKS
 setwd("./data/Landmarks/")
 dir()
 LMs <- fcsv2array(string_del = "_Fiducials")
-# MVG - make an option to import markup fcsv instead of regurlar fcsv
+str(LMs)
+dimnames(LMs)[[3]]
+row.names(classifiers_unord)
+
+classifiers <- classifiers_unord[match(dimnames(LMs)[[3]], row.names(classifiers_unord)),]
+
+setwd("../../")
+
+# CURVE SEMILANDMARKS
+setwd("./data/Semi_Curves/")
+dir(pattern = "center")
+dir(pattern = "L")
+dir(pattern = "R")
+
+curve_semis_center <- fcsv2array(pattern = "*center*", string_del = "_center_semi-curve")
+curve_semis_L <- fcsv2array(pattern = "*_L_semi-curve*", string_del = "_L_semi-curve")
+curve_semis_R <- fcsv2array(pattern = "*_R_semi-curve*", string_del = "_R_semi-curve")
+
+str(curve_semis_center)
+str(curve_semis_L)
+str(curve_semis_R)
+
+dimnames(curve_semis_center)[[3]]
+dimnames(curve_semis_L)[[3]]
+dimnames(curve_semis_R)[[3]]
 
 
-# 2. Combine all arrays into a single one, in a particular order that makes sense for our GMM
+# SURFACE SEMILANDMARKS
+setwd("../Semi_Points/")
+
+dir()
+surf_semis_L <- fcsv2array(pattern = "*_L_semi-lm*", string_del = "_L_semi-lm")
+surf_semis_R <- fcsv2array(pattern = "*_R_semi-lm*", string_del = "_R_semi-lm")
+
+setwd("../../")
+
+# 2. Generate a curveslide file for the GPA that tells us how the curve semis have to slide (constrained)
+head_mesh_spec1 <- vcgImport("./data/Meshes/chick_ctr_1.ply") # Not sure what is wrong with this mesh
+head_mesh_spec1_dec <- vcgQEdecim(head_mesh_spec1, percent = 0.15)
+head_mesh_spec1_dec <- vcgQEdecim(head_mesh_spec1_dec, percent = 0.25)
+
+open3d(zoom = 0.75, windowRect = c(0, 0, 700, 700)) 
+rgl::shade3d(head_mesh_spec1_dec, color = "gray", alpha =0.9)
+rgl::plot3d(LMs[,,1], aspect = "iso", type = "s", size=1.2, col = "darkblue", add = T)
+rgl::text3d(x = LMs[,1,1],
+            y = LMs[,2,1],
+            z = LMs[,3,1],
+            texts = c(1:dim(LMs)[1]),
+            cex = 1.5, offset = 0.5, pos = 1)
+
+rgl::plot3d(curve_semis_center[,,1], aspect = "iso", type = "s", size=0.5, col = "orange", add = T)
+rgl::text3d(x = curve_semis_center[,1,1],
+            y = curve_semis_center[,2,1],
+            z = curve_semis_center[,3,1],
+            texts = c(1:dim(curve_semis_center)[1]),
+            cex = 0.75, offset = 0.5, pos = 2)
+
+rgl::plot3d(curve_semis_R[,,1], aspect = "iso", type = "s", size=0.75, col = "orange", add = T)
+rgl::text3d(x = curve_semis_R[,1,1],
+            y = curve_semis_R[,2,1],
+            z = curve_semis_R[,3,1],
+            texts = c(1:dim(curve_semis_R)[1]),
+            cex = 0.75, offset = 0.5, pos = 2)
+
+rgl::plot3d(curve_semis_L[,,1], aspect = "iso", type = "s", size=0.75, col = "orange", add = T)
+rgl::text3d(x = curve_semis_L[,1,1],
+            y = curve_semis_L[,2,1],
+            z = curve_semis_L[,3,1],
+            texts = c(1:dim(curve_semis_L)[1]),
+            cex = 0.75, offset = 0.5, pos = 2)
+rgl.close()
+
+# CENTRE CURVE
+# Delete positions #1 & #5 in curve_semis_center
+# semi2 slides between LM9 & semi3
+# semi3 slides between semi2 & semi4
+# semi4 slides between semi3 & LM10
+
+# RIGHT & LEFT CURVES - positions from top to bottoms
+
+
+curveslide_head <- 
+  
+  
+# 3. Combine all arrays into a single one, in a particular order that makes sense for our GMM
 ?abind
 
 head_array <- 
-
-# 3. Generate a curveslide file for the GPA that tells us how the curve semis have to slide (constrained)
-
-curveslide_head <- 
   
 # 4. Write down the order within the combined array of the surface semis
 head_fixed.lm <- c(1:dim(LMs)[1])

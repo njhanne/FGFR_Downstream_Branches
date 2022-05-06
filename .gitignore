@@ -1,12 +1,11 @@
-# Existing un-needed folders
-Slicer_GPA
-Old_LMs
-
-# R useless files
+# Forever
+.Rproj.user
 .Rhistory
-.Rapp.history
-.DS_Store
 .RData
 .Ruserdata
-.Renviron
-.Rproj.user/
+
+# Temporary
+data/Meshes/*.vtk
+Slicer_GPA/*
+Raw_Scans/*
+Old_LMs/*
