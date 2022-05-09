@@ -1,0 +1,17 @@
+ANOVA shape - treatment (coords ~ treatment)
+
+Analysis of Variance, using Residual Randomization
+Permutation procedure: Randomization of null model residuals 
+Number of permutations: 1000 
+Estimation method: Ordinary Least Squares 
+Sums of Squares and Cross-products: Type I 
+Effect sizes (Z) based on F distributions
+
+          Df       SS        MS     Rsq      F      Z Pr(>F)   
+treatment  1 0.018484 0.0184843 0.25337 5.0902 2.8181  0.001 **
+Residuals 15 0.054470 0.0036313 0.74663                        
+Total     16 0.072954                                          
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Call: procD.lm(f1 = coords ~ treatment, RRPP = TRUE, data = gdf_head)

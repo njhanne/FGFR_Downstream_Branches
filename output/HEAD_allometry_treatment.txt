@@ -1,0 +1,19 @@
+Allometry * treatment (coords ~ Csize * treatment)
+
+Analysis of Variance, using Residual Randomization
+Permutation procedure: Randomization of null model residuals 
+Number of permutations: 1000 
+Estimation method: Ordinary Least Squares 
+Sums of Squares and Cross-products: Type I 
+Effect sizes (Z) based on F distributions
+
+                Df       SS        MS     Rsq      F       Z Pr(>F)   
+Csize            1 0.015199 0.0151991 0.20834 4.6080 2.46881  0.004 **
+treatment        1 0.011308 0.0113081 0.15500 3.4283 2.72868  0.004 **
+Csize:treatment  1 0.003567 0.0035673 0.04890 1.0815 0.32595  0.354   
+Residuals       13 0.042880 0.0032984 0.58776                         
+Total           16 0.072954                                           
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Call: procD.lm(f1 = coords ~ Csize * treatment, iter = 999, RRPP = TRUE,      data = gdf_head)

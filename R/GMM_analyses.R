@@ -203,7 +203,7 @@ min(outliers_c$All_Proc_d$`Proc. d. from mean`) # actually I got lazy & did it t
 row.names(outliers_c$All_Proc_d[which(outliers_c$All_Proc_d$`Proc. d. from mean` == min(outliers_c$All_Proc_d$`Proc. d. from mean`)),])
 # Ah, very nice! Need to clean this mesh on meshlab now: "chick_ctr_7"
 
-
+classifiers <- classifiers[-which(row.names(classifiers) == "chick_exp_3"),]
 #### 3. ATLAS HEAD & PLOTS ####
 # (hypervolume) - which means the smalles Procrustes distance, (3) use the set of LMs & mesh of that specimen
 head_mesh <- geomorph::read.ply("./data/atlas/Calgary_Adult_Cranium_Atlas_DS_ascii.ply") # Not sure what is wrong with this mesh
@@ -311,7 +311,7 @@ plot(PCA_head, pch = 19, col = classifiers$treatment, cex = 1.25)
 ordiellipse(PCA_head, classifiers$treatment, kind="sd",conf=0.95, col = palette(),
             draw = "polygon", alpha = 0.2, lty = 0)
 legend("topright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
-title("PCA of shape coordinates - RASOPATHY P34R+ vs P34R-")
+title("PCA of shape coordinates - CTRL vs treatment")
 dev.off()
 
 
@@ -362,6 +362,7 @@ par(mfrow=c(1,1))
 PCA_comp <- PCA_head
 class(PCA_comp) <- "princomp"
 
+png("./figs/PCA_head_shape_scree_plot.png", width = 300, height = 300)
 pdf("./figs/PCA_head_shape_scree_plot.pdf", height = 5, width = 5)
 pca_scree <- fviz_eig(PCA_comp, addlabels=TRUE, hjust = -0.3,
                       barfill="darkgrey", barcolor ="black",
@@ -375,7 +376,7 @@ dev.off()
 
 Pdist <- ShapeDist(GPA_head$coords, GPA_head$consensus)
 
-gdf_head <- geomorph.data.frame(GPA_head, treatment = classifiers$treatment, Pdist = Pdist, sex = classifiers$Sex)
+gdf_head <- geomorph.data.frame(GPA_head, treatment = classifiers$treatment, Pdist = Pdist)
 
 
 ggplot_df <- as.data.frame(cbind(as.character(gdf_head$Csize), 

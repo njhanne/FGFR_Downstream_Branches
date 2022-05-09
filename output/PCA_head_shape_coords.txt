@@ -1,0 +1,21 @@
+PCA shape variables raw
+
+Ordination type: Principal Component Analysis 
+Centering by OLS mean
+Orthogonal projection of OLS residuals
+Number of observations: 17 
+Number of vectors 16 
+
+Importance of Components:
+                             Comp1        Comp2        Comp3        Comp4        Comp5        Comp6
+Eigenvalues            0.001973257 0.0006384869 0.0004133775 0.0003525902 0.0003210955 0.0002600634
+Proportion of Variance 0.432766978 0.1400304625 0.0906603413 0.0773287039 0.0704214121 0.0570360947
+Cumulative Proportion  0.432766978 0.5727974406 0.6634577819 0.7407864859 0.8112078979 0.8682439926
+                              Comp7        Comp8        Comp9       Comp10       Comp11       Comp12
+Eigenvalues            0.0001387435 0.0001131615 9.549913e-05 6.670948e-05 5.789934e-05 4.081095e-05
+Proportion of Variance 0.0304286893 0.0248181462 2.094450e-02 1.463046e-02 1.269826e-02 8.950497e-03
+Cumulative Proportion  0.8986726819 0.9234908281 9.444353e-01 9.590658e-01 9.717640e-01 9.807145e-01
+                             Comp13       Comp14       Comp15       Comp16
+Eigenvalues            2.979114e-05 2.631633e-05 1.848711e-05 1.333993e-05
+Proportion of Variance 6.533678e-03 5.771595e-03 4.054520e-03 2.925662e-03
+Cumulative Proportion  9.872482e-01 9.930198e-01 9.970743e-01 1.000000e+00
