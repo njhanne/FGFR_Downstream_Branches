@@ -5,7 +5,7 @@ library(geomorph)
 library(devtools)
 install_github("marta-vidalgarcia/morpho.tools.GM", force = TRUE)
 library(morpho.tools.GM)
-install_github("marta-vidalgarcia/mesh_process", force = TRUE)
+# install_github("marta-vidalgarcia/mesh_process")
 library(mesh_process)
 library(Morpho)
 library(Rvcg)
@@ -32,7 +32,8 @@ classifiers_unord$treatment <- as.factor(classifiers_unord$treatment)
 row.names(classifiers_unord) <- classifiers_unord$id
 classifiers_unord
 
-#### 2. GM ANALYSES EMBRYO FACES ####
+#### 2. ANALYSES PREP EMBRYO FACES ####
+#### 2.1 IMPORT LANDMARK DATA ####
 # 1. Import all fcsv files into separate arrays (all specimens for east LM set)
 ?morpho.tools.GM::fcsv2array
 
@@ -68,6 +69,7 @@ dimnames(curve_semis_R)[[3]]
 
 
 # SURFACE SEMILANDMARKS
+
 setwd("../Semi_Points/")
 
 dir()
@@ -76,7 +78,34 @@ surf_semis_R <- fcsv2array(pattern = "*_R_semi-lm*", string_del = "_R_semi-lm")
 
 setwd("../../")
 
-# 2. Generate a curveslide file for the GPA that tells us how the curve semis have to slide (constrained)
+#### 2.2. NEW ARRAY ####
+# Combine all arrays into a single one, in a particular order that makes sense for our GMM
+# CENTRE CURVE
+# Delete positions #1 & #5 in curve_semis_center
+curve_semis_center <- curve_semis_center[-c(1,5),,]
+
+head_array <- abind(LMs, curve_semis_center, curve_semis_L, curve_semis_R, surf_semis_L, 
+                    curve_semis_R, along = 1)
+
+dimnames(head_array)[[3]]
+
+dim(LMs)[1]
+dim(curve_semis_center)[1]
+dim(curve_semis_L)[1]
+dim(curve_semis_R)[1]
+dim(surf_semis_L)[1]
+dim(surf_semis_R)[1]
+
+
+#### 2.3. CURVESLIDE ####
+# Generate a curveslide file for the GPA that tells us how the curve semis have to slide (constrained)
+
+# curve semis positions
+semis_center <- (dim(LMs)[1]+1):(dim(LMs)[1]+dim(curve_semis_center)[1])
+semis_L <- (dim(LMs)[1]+dim(curve_semis_center)[1]+1):(dim(LMs)[1]+dim(curve_semis_center)[1]+dim(curve_semis_L)[1])
+semis_R <- (dim(LMs)[1]+dim(curve_semis_center)[1]+dim(curve_semis_L)[1]+1):(dim(LMs)[1]+dim(curve_semis_center)[1]+dim(curve_semis_L)[1]+dim(curve_semis_R)[1])
+
+# PLOTTING THE LANDMARKS TO CHECK THE SEMIS
 head_mesh_spec1 <- vcgImport("./data/Meshes/chick_ctr_1.ply") # Not sure what is wrong with this mesh
 head_mesh_spec1_dec <- vcgQEdecim(head_mesh_spec1, percent = 0.15)
 head_mesh_spec1_dec <- vcgQEdecim(head_mesh_spec1_dec, percent = 0.25)
@@ -112,44 +141,67 @@ rgl::text3d(x = curve_semis_L[,1,1],
             cex = 0.75, offset = 0.5, pos = 2)
 rgl.close()
 
-# CENTRE CURVE
-# Delete positions #1 & #5 in curve_semis_center
-# semi2 slides between LM9 & semi3
-# semi3 slides between semi2 & semi4
-# semi4 slides between semi3 & LM10
+
+# CENTER CURVE - CURVESLIDE
+# We need to create a curveslide matrix to know where from to where to the semis slide
+# semi1 slides between LM9 & semi2
+# semi2 slides between semi1 & semi3
+# semi3 slides between semi2 & LM10
+curve_c_left <- c(9, semis_center[c(1,2)])
+curve_c_right <- c(semis_center[c(2,3)], 10)
+curveslide_c <- cbind(curve_c_left, semis_center, curve_c_right)
 
 # RIGHT & LEFT CURVES - positions from top to bottoms
+curve_L_left <- semis_L[c(1:(length(semis_L)-2))] # remember that landmarks 16 & 24 will be treated as landmarks!
+curve_L_right <- semis_L[c(3:length(semis_L))]
+curve_L_center <- semis_L[c(2:(length(semis_L)-1))]
+curveslide_L <- cbind(curve_L_left, curve_L_center, curve_L_right)
+
+curve_R_left <- semis_R[c(1:(length(semis_R)-2))] 
+curve_R_right <- semis_R[c(3:length(semis_R))]
+curve_R_center <- semis_R[c(2:(length(semis_R)-1))]
+curveslide_R <- cbind(curve_R_left, curve_R_center, curve_R_right)
 
 
-curveslide_head <- 
-  
-  
-# 3. Combine all arrays into a single one, in a particular order that makes sense for our GMM
-?abind
+# all our curveslide matrices
+ls(pattern = "curveslide*")
+curveslide_list <- lapply(ls(pattern = "curveslide*"), get)
+str(curveslide_list)
+curveslide_all <- do.call(rbind, curveslide_list)
+curveslide_all <- as.data.frame(curveslide_all)
+colnames(curveslide_all) <- c("left", "sliding", "right")
+write.csv(curveslide_all, "./data/curveslide.csv")
 
-head_array <- 
-  
-# 4. Write down the order within the combined array of the surface semis
-head_fixed.lm <- c(1:dim(LMs)[1])
-head_curves.lm <- 
-head_surface.lm <- 
-  
-# with all of these steps we can then run a GPA
+# Surface landmarks
+head_surface.lm <- (dim(LMs)[1]+dim(curve_semis_center)[1]+dim(curve_semis_L)[1]+dim(curve_semis_R)[1]+1):dim(head_array)[1]
 
 
-
+#### 2.5. GPA ####
+# Use this to find out who is the closest to the shape sphere centroid
 str(head_array)
-GPA_head <- geomorph::gpagen(A = head_array, curves = as.matrix(curveslide_head), surfaces = head_surface.lm)
+GPA_head_o <- geomorph::gpagen(A = head_array, curves = as.matrix(curveslide_all), 
+                             surfaces = head_surface.lm)
 
-str(GPA_head)
+outlier <- plotOutliers_percentile(A = GPA_head_o$coords, percentile = 0.99, save.plot = TRUE)
+# Looks very much like an outlier. Maybe some errors in the landmarking? Ask Nicholas
 
-plotOutliers_percentile(A = GPA_head$coords, percentile = 0.99, save.plot = FALSE)
+# Get rid of it until Nicholas fixes the landmarks
+clean_head_array <- head_array[,,-which(dimnames(head_array)[[3]] == row.names(outlier$Proc_d_percentile))]
 
+GPA_head <- geomorph::gpagen(A = clean_head_array, curves = as.matrix(curveslide_all), 
+                               surfaces = head_surface.lm)
+
+
+outliers_c <- plotOutliers_percentile(A = GPA_head$coords, percentile = 0.90, save.plot = FALSE)
+# They don't look like outliers to me, just a more severe phenotype
+# excellent, keep going
 
 # For the atlas we are going to: (1) perform a GPA, (2) find the specimens the closest to the center of the morphospace
 # Pdist <- ShapeDist(GPA_head$coords, GPA_head$consensus)
 # find who it is
-
+min(outliers_c$All_Proc_d$`Proc. d. from mean`) # actually I got lazy & did it this easier way, same concept as above though
+row.names(outliers_c$All_Proc_d[which(outliers_c$All_Proc_d$`Proc. d. from mean` == min(outliers_c$All_Proc_d$`Proc. d. from mean`)),])
+# Ah, very nice! Need to clean this mesh on meshlab now: "chick_ctr_7"
 
 
 #### 3. ATLAS HEAD & PLOTS ####
