@@ -153,6 +153,7 @@ curveslide_c <- cbind(curve_c_left, semis_center, curve_c_right)
 
 # RIGHT & LEFT CURVES - positions from top to bottoms
 curve_L_left <- semis_L[c(1:(length(semis_L)-2))] # remember that landmarks 16 & 24 will be treated as landmarks!
+# Change them later for the final analyses to slide between the nasal pits and the next semis
 curve_L_right <- semis_L[c(3:length(semis_L))]
 curve_L_center <- semis_L[c(2:(length(semis_L)-1))]
 curveslide_L <- cbind(curve_L_left, curve_L_center, curve_L_right)
