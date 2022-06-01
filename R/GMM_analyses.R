@@ -20,7 +20,7 @@ library(gt)
 library(abind)
 
 # setwd("~/Documents/GITHUB_repos/FGFR-Branches-GM/")
-
+# setwd("C:/Users/nhanne/Box/FGF_inhibitor_paper_5-26-2020/Morphology/3D_data")
 
 #### 1. LOAD LM DATA & CLASSIFIERS ####
 classifiers_unord  <- read.csv("./data/classifiers.csv", header = TRUE)
@@ -50,6 +50,16 @@ classifiers <- classifiers_unord[match(dimnames(LMs)[[3]], row.names(classifiers
 setwd("../../")
 
 # CURVE SEMILANDMARKS
+fcsv_number_check <- function(dir, pattern) {
+  fcsv_list <- dir(dir, pattern = pattern)
+  n_land <- vector("numeric", length = length(fcsv_list))
+  for (i in 1:length(fcsv_list)) {
+    n_land[i] <- length(count.fields(fcsv_list[i]))
+  }
+  checker_df <- do.call(rbind.data.frame, Map('c', fcsv_list, n_land))
+  return(checker_df)
+}
+
 setwd("./data/Semi_Curves/")
 dir(pattern = "center")
 dir(pattern = "L")
@@ -86,6 +96,8 @@ curve_semis_center <- curve_semis_center[-c(1,5),,]
 
 head_array <- abind(LMs, curve_semis_center, curve_semis_L, curve_semis_R, surf_semis_L, 
                     curve_semis_R, along = 1)
+
+head_array_no_side_curve <- abind(LMs, curve_semis_center, surf_semis_L, curve_semis_R, along = 1)
 
 dimnames(head_array)[[3]]
 
@@ -175,6 +187,7 @@ write.csv(curveslide_all, "./data/curveslide.csv")
 
 # Surface landmarks
 head_surface.lm <- (dim(LMs)[1]+dim(curve_semis_center)[1]+dim(curve_semis_L)[1]+dim(curve_semis_R)[1]+1):dim(head_array)[1]
+head_surface.lm2 <- (dim(LMs)[1]+dim(curve_semis_center)[1]+1):dim(head_array_no_side_curve)[1]
 
 
 #### 2.5. GPA ####
@@ -184,6 +197,13 @@ GPA_head_o <- geomorph::gpagen(A = head_array, curves = as.matrix(curveslide_all
                              surfaces = head_surface.lm)
 
 outlier <- plotOutliers_percentile(A = GPA_head_o$coords, percentile = 0.99, save.plot = TRUE)
+
+
+
+GPA_head_o2 <- geomorph::gpagen(A = head_array_no_side_curve, curves = as.matrix(curveslide_c), 
+                               surfaces = head_surface.lm2)
+
+outlier <- plotOutliers_percentile(A = GPA_head_o2$coords, percentile = 0.99, save.plot = TRUE)
 # Looks very much like an outlier. Maybe some errors in the landmarking? Ask Nicholas
 
 # Get rid of it until Nicholas fixes the landmarks
@@ -202,7 +222,7 @@ outliers_c <- plotOutliers_percentile(A = GPA_head$coords, percentile = 0.90, sa
 # find who it is
 min(outliers_c$All_Proc_d$`Proc. d. from mean`) # actually I got lazy & did it this easier way, same concept as above though
 row.names(outliers_c$All_Proc_d[which(outliers_c$All_Proc_d$`Proc. d. from mean` == min(outliers_c$All_Proc_d$`Proc. d. from mean`)),])
-# Ah, very nice! Need to clean this mesh on meshlab now: "chick_ctr_7"
+# Ah, very nice! Need to clean this mesh on meshlab now: "chick_ctr_23"
 
 classifiers <- classifiers[-which(row.names(classifiers) == "chick_exp_3"),]
 #### 3. ATLAS HEAD & PLOTS ####
@@ -407,7 +427,7 @@ ggplot(ggplot_df, aes(x=treatment, y=log(Csize), fill=treatment)) +
 dev.off()
 
 
-pdf("./figs/Pdist_treatment.pdf_HEAD", width = 6.5, height = 6.5)
+pdf("./figs/Pdist_treatment.pdf", width = 6.5, height = 6.5)
 ggplot(ggplot_df, aes(Pdist, fill = treatment)) +
   scale_fill_manual(values=c("navy", "darkorange")) + geom_density(alpha = 0.65) + 
   ggtitle("Procrustes distances head shape") + xlab("Procrustes distance") + ylab("Relative density") +
@@ -690,20 +710,3 @@ i
 
 image_browse(imgs)
 image_write(imgs, path = paste0("./figs/pc_morphs/HEAD_SHAPE_heatmap_morphs_PC1-", i, ".png"), format = "png")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
