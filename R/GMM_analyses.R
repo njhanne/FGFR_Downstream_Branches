@@ -22,6 +22,28 @@ library(abind)
 # setwd("~/Documents/GITHUB_repos/FGFR-Branches-GM/")
 # setwd("C:/Users/nhanne/Box/FGF_inhibitor_paper_5-26-2020/Morphology/3D_data")
 
+# # Create directories.
+### WILL IT WORK ON WINDOWS???
+# getwd() # where are we? We should always be in the project main directory
+# folder_structure <- c("./figs", "./figs/pc_morphs", "./figs/pc_morphs/skull", "./figs/pc_morphs/endo", "./figs/pc_morphs/mandible",
+#                       "./data", "./data/atlas", "./data/Prop_LMs", "./data/Prop_LMs/LM_skull", "./data/Prop_LMs/LM_endocast",
+#                       "./data/Prop_LMs/LM_mandible", "./output", "./R")
+# 
+# dir.exists(folder_structure) # it should all be false unless you created folders manually. I recommend doing it this way
+# 
+# for (i in 1:length(folder_structure)){
+#   dir.create(folder_structure[i], mode = "0777") # create these folders
+# }
+
+
+# Then save this script inside the R folder
+# Copy landmark data to the Prop_LMs folder
+# Copy atlases inside the data/atlas folder. We will need:
+# PLY of skull, endocast & mandible. 
+# CURVESLIDE FILES for endocast, skull, mandible
+# ATLAS TAG file for skull, endocast, mandible
+# Copy classifiers file inside data and make sure it is a csv and there are no issues
+
 #### 1. LOAD LM DATA & CLASSIFIERS ####
 classifiers_unord  <- read.csv("./data/classifiers.csv", header = TRUE)
 head(classifiers_unord)
@@ -297,6 +319,10 @@ PCA_head <- gm.prcomp(GPA_head$coords)
 summary(PCA_head)
 str(PCA_head)
 
+# Delete file if it exists
+if (file.exists("./output/PCA_head_shape_coords.txt")) {
+  file.remove("./output/PCA_head_shape_coords.txt")
+}
 cat("PCA shape variables raw", capture.output(summary(PCA_head)), 
     file="./output/PCA_head_shape_coords.txt", sep="\n", append=TRUE)
 
@@ -440,6 +466,11 @@ dev.off()
 
 allometry_all <- procD.lm(coords ~ Csize, data = gdf_head, iter = 999, RRPP = TRUE)
 summary(allometry_all)
+# Delete file if it exists
+if (file.exists("./output/HEAD_allometry_all.txt")) {
+  file.remove("./output/HEAD_allometry_all.txt")
+}
+
 cat("Allometry (coords ~ Csize)", capture.output(summary(allometry_all)), 
     file="./output/HEAD_allometry_all.txt", sep="\n", append=TRUE)
 
@@ -448,6 +479,12 @@ write.csv(shape_residuals, "./output/HEAD_shape_residuals.csv")
 
 allometry_treatment <- procD.lm(coords ~ Csize * treatment, data = gdf_head, iter = 999, RRPP = TRUE)
 summary(allometry_treatment)
+
+# Delete file if it exists
+if (file.exists("./output/HEAD_allometry_treatment.txt")) {
+  file.remove("./output/HEAD_allometry_treatment.txt")
+}
+
 cat("Allometry * treatment (coords ~ Csize * treatment)", capture.output(summary(allometry_treatment)), 
     file="./output/HEAD_allometry_treatment.txt", sep="\n", append=TRUE)
 
@@ -455,12 +492,24 @@ cat("Allometry * treatment (coords ~ Csize * treatment)", capture.output(summary
 # ANOVA treatment
 treatment <- procD.lm(coords ~ treatment, data = gdf_head, RRPP = TRUE)
 summary(treatment)
+
+# Delete file if it exists
+if (file.exists("./output/ANOVA_HEAD_shape_treatment.txt")) {
+  file.remove("./output/ANOVA_HEAD_shape_treatment.txt")
+}
+
 cat("ANOVA shape - treatment (coords ~ treatment)", capture.output(summary(treatment)), 
     file="./output/ANOVA_HEAD_shape_treatment.txt", sep="\n", append=TRUE)
 
 
 one_way <- aov(log(gdf_head$Csize) ~ gdf_head$treatment)
 summary(one_way)
+
+# Delete file if it exists
+if (file.exists("./output/ANOVA_HEAD_Csize_treatment.txt")) {
+  file.remove("./output/ANOVA_HEAD_Csize_treatment.txt")
+}
+
 cat("ANOVA Csize - treatment (Csize ~ treatment)", capture.output(summary(one_way)), 
     file="./output/ANOVA_HEAD_Csize_treatment.txt", sep="\n", append=TRUE)
 
@@ -469,7 +518,7 @@ cat("ANOVA Csize - treatment (Csize ~ treatment)", capture.output(summary(one_wa
 
 gdf_head$treatment
 
-who_is_MUT <- which(gdf_head$treatment == "P34R+") # I think?
+who_is_MUT <- which(gdf_head$treatment == "triple")
 MUT_coords <- gdf_head$coords[,,who_is_MUT]
 dim(MUT_coords)
 
