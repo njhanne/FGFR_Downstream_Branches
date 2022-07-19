@@ -116,7 +116,7 @@ setwd("../../")
 curve_semis_center <- curve_semis_center[-c(1,5),,]
 
 head_array <- abind(LMs, curve_semis_center, curve_semis_L, curve_semis_R, surf_semis_L, 
-                    curve_semis_R, along = 1)
+                    surf_semis_R, along = 1)
 
 head_array_no_side_curve <- abind(LMs, curve_semis_center, surf_semis_L, curve_semis_R, along = 1)
 
