@@ -649,7 +649,7 @@ for (i in 1:n_dimensions){
   #Heatmaps
   open3d(zoom=0.75, userMatrix = dorsal, windowRect= c(0,0,1000,700))
   x11(width=1.7, height=8)
-  meshDist(PC_max, PC_min, rampcolors = c("darkblue", "blue", "white", "red", "darkred"), sign = TRUE)
+  meshDist(PC_min, PC_max, rampcolors = c("darkblue", "blue", "white", "red", "darkred"), sign = TRUE)
   rgl.snapshot(paste0("./figs/pc_morphs/head/heat_",PC,"_","dorsal.png"), top = TRUE)
   # dev.copy(pdf, paste0("./figs/pc_morphs/head/heat_",PC,"_scale.pdf"), width=2, height=9.5)
   dev.print(pdf, paste0("./figs/pc_morphs/head/heat_",PC,"_scale.pdf"), width=2, height=9.5)
