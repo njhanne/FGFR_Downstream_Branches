@@ -7,32 +7,13 @@ Estimation method: Ordinary Least Squares
 Sums of Squares and Cross-products: Type I 
 Effect sizes (Z) based on F distributions
 
-                Df       SS        MS     Rsq      F       Z Pr(>F)   
-Csize            1 0.015199 0.0151991 0.20834 4.6080 2.46881  0.004 **
-treatment        1 0.011308 0.0113081 0.15500 3.4283 2.72868  0.004 **
-Csize:treatment  1 0.003567 0.0035673 0.04890 1.0815 0.32595  0.354   
-Residuals       13 0.042880 0.0032984 0.58776                         
-Total           16 0.072954                                           
+                Df       SS       MS     Rsq      F      Z Pr(>F)   
+Csize            1 0.044501 0.044501 0.14254 9.6565 3.7224  0.001 **
+treatment        1 0.032753 0.032753 0.10491 7.1072 4.8174  0.001 **
+Csize:treatment  1 0.004522 0.004522 0.01448 0.9813 0.1804  0.414   
+Residuals       50 0.230419 0.004608 0.73806                        
+Total           53 0.312194                                         
 ---
 Signif. codes:  0 â€˜***â€™ 0.001 â€˜**â€™ 0.01 â€˜*â€™ 0.05 â€˜.â€™ 0.1 â€˜ â€™ 1
-
-Call: procD.lm(f1 = coords ~ Csize * treatment, iter = 999, RRPP = TRUE,      data = gdf_head)
-Allometry * treatment (coords ~ Csize * treatment)
-
-Analysis of Variance, using Residual Randomization
-Permutation procedure: Randomization of null model residuals 
-Number of permutations: 1000 
-Estimation method: Ordinary Least Squares 
-Sums of Squares and Cross-products: Type I 
-Effect sizes (Z) based on F distributions
-
-                Df      SS       MS     Rsq      F      Z Pr(>F)   
-Csize            1 0.05607 0.056070 0.13972 9.1352 3.4422  0.001 **
-treatment        1 0.03236 0.032365 0.08065 5.2731 3.2949  0.001 **
-Csize:treatment  1 0.00598 0.005981 0.01490 0.9745 0.2206  0.403   
-Residuals       50 0.30689 0.006138 0.76473                        
-Total           53 0.40130                                         
----
-Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
 
 Call: procD.lm(f1 = coords ~ Csize * treatment, iter = 999, RRPP = TRUE,      data = gdf_head)

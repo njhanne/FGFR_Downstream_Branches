@@ -1,12 +1,6 @@
 ANOVA Csize - treatment (Csize ~ treatment)
-                   Df   Sum Sq  Mean Sq F value Pr(>F)  
-gdf_head$treatment  1 0.006516 0.006516   3.141 0.0967 .
-Residuals          15 0.031117 0.002074                 
+                   Df  Sum Sq  Mean Sq F value   Pr(>F)    
+gdf_head$treatment  1 0.02881 0.028807   14.53 0.000367 ***
+Residuals          52 0.10310 0.001983                     
 ---
 Signif. codes:  0 â€˜***â€™ 0.001 â€˜**â€™ 0.01 â€˜*â€™ 0.05 â€˜.â€™ 0.1 â€˜ â€™ 1
-ANOVA Csize - treatment (Csize ~ treatment)
-                   Df  Sum Sq Mean Sq F value   Pr(>F)    
-gdf_head$treatment  1 0.03396 0.03396   17.57 0.000108 ***
-Residuals          52 0.10047 0.00193                     
----
-Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1

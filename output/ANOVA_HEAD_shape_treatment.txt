@@ -7,28 +7,11 @@ Estimation method: Ordinary Least Squares
 Sums of Squares and Cross-products: Type I 
 Effect sizes (Z) based on F distributions
 
-          Df       SS        MS     Rsq      F      Z Pr(>F)   
-treatment  1 0.018484 0.0184843 0.25337 5.0902 2.8181  0.001 **
-Residuals 15 0.054470 0.0036313 0.74663                        
-Total     16 0.072954                                          
+          Df       SS       MS     Rsq      F      Z Pr(>F)   
+treatment  1 0.053563 0.053563 0.17157 10.769 4.2848  0.001 **
+Residuals 52 0.258632 0.004974 0.82843                        
+Total     53 0.312194                                         
 ---
 Signif. codes:  0 â€˜***â€™ 0.001 â€˜**â€™ 0.01 â€˜*â€™ 0.05 â€˜.â€™ 0.1 â€˜ â€™ 1
-
-Call: procD.lm(f1 = coords ~ treatment, RRPP = TRUE, data = gdf_head)
-ANOVA shape - treatment (coords ~ treatment)
-
-Analysis of Variance, using Residual Randomization
-Permutation procedure: Randomization of null model residuals 
-Number of permutations: 1000 
-Estimation method: Ordinary Least Squares 
-Sums of Squares and Cross-products: Type I 
-Effect sizes (Z) based on F distributions
-
-          Df      SS       MS     Rsq      F      Z Pr(>F)   
-treatment  1 0.06555 0.065547 0.16334 10.152 3.8708  0.001 **
-Residuals 52 0.33575 0.006457 0.83666                        
-Total     53 0.40130                                         
----
-Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
 
 Call: procD.lm(f1 = coords ~ treatment, RRPP = TRUE, data = gdf_head)
