@@ -35,13 +35,13 @@ library(abind)
 # }
 
 
-# Then save this script indorsal the R folder
+# Then save this script inside the R folder
 # Copy landmark data to the Prop_LMs folder
-# Copy atlases indorsal the data/atlas folder. We will need:
+# Copy atlases inside the data/atlas folder. We will need:
 # PLY of head, endocast & mandible. 
 # CURVESLIDE FILES for endocast, head, mandible
 # ATLAS TAG file for head, endocast, mandible
-# Copy classifiers file indorsal data and make sure it is a csv and there are no issues
+# Copy classifiers file inside data and make sure it is a csv and there are no issues
 
 #### 1. LOAD LM DATA & CLASSIFIERS ####
 classifiers_unord  <- read.csv("./data/classifiers.csv", header = TRUE)
