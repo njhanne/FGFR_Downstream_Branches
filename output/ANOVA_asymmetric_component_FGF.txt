@@ -1,0 +1,17 @@
+ANOVA_ASYM_FGF
+
+Analysis of Variance, using Residual Randomization
+Permutation procedure: Randomization of null model residuals 
+Number of permutations: 1000 
+Estimation method: Ordinary Least Squares 
+Sums of Squares and Cross-products: Type I 
+Effect sizes (Z) based on F distributions
+
+                      Df      SS       MS     Rsq      F      Z Pr(>F)   
+classifiers$treatment  1 0.12142 0.121422 0.26826 19.064 3.7231  0.001 **
+Residuals             52 0.33120 0.006369 0.73174                        
+Total                 53 0.45262                                         
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Call: procD.lm(f1 = SYM_FGF$asymm.shape ~ classifiers$treatment, iter = 999,      RRPP = TRUE, print.progress = FALSE)

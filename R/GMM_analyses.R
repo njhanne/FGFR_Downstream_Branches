@@ -221,9 +221,10 @@ str(head_array)
 GPA_head_o <- geomorph::gpagen(A = head_array, curves = as.matrix(curveslide_all), 
                              surfaces = head_surface.lm)
 
-outlier <- plotOutliers_percentile(A = GPA_head_o$coords, percentile = 0.99, save.plot = TRUE)
+outlier <- plotOutliers_percentile(A = GPA_head_o$coords, percentile = 0.99, save.plot = FALSE)
 
-
+saveRDS(head_array, "./data/Head_LM_array_FGF_embryos.rds")
+saveRDS(GPA_head_o, "./data/GPA_FGF_embryos.rds")
 
 # GPA_head_o2 <- geomorph::gpagen(A = head_array_no_dorsal_curve, curves = as.matrix(curveslide_c), 
 #                                surfaces = head_surface.lm2)
