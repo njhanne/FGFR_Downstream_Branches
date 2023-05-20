@@ -71,6 +71,8 @@ atlas_head_lm <- head_array[,, which(dimnames(head_array)[[3]] == "chick_ctr_23"
 detect.symmetry(head_array[1:12,,], sym.plane = "yz", plot = TRUE)
 detect.symmetry(head_array[1:33,,], sym.plane = "yz", plot = TRUE)
 detect.symmetry(head_array[,,], sym.plane = "yz", plot = TRUE)
+
+
 non.sym <- c(9, 10, 13:15)
 side.1 <- c(2,4, 6, 8, 12, 16:24, 34:42)
 side.2 <- c(1, 3, 5, 7, 11, 25:33, 43:51)
@@ -94,7 +96,7 @@ str(SYM_FGF$FA.component)
 str(SYM_FGF$DA.component)
 
 
-#### 3.1 SYMMETRIC COMPONENT ####
+#### 3.1. SYMMETRIC COMPONENT ####
 
 PCA_SYM_FGF <- gm.prcomp(SYM_FGF$symm.shape)
 classifiers$treatment
@@ -130,7 +132,7 @@ summary(ANOVA_ALL_sym)
 cat("ANOVA_SYM_FGF", capture.output(summary(ANOVA_ALL_sym)), 
     file="./output/ANOVA_symmetric_component_FGF.txt", sep="\n", append=TRUE)
 
-### 3.2 ASYMMETRIC COMPONENT ####
+### 3.2. ASYMMETRIC COMPONENT ####
 
 PCA_ASYM_FGF <- gm.prcomp(SYM_FGF$asymm.shape)
 classifiers$treatment
@@ -168,7 +170,7 @@ cat("ANOVA_ASYM_FGF", capture.output(summary(ANOVA_ASYM_FGF)),
     file="./output/ANOVA_asymmetric_component_FGF.txt", sep="\n", append=TRUE)
 
 
-#### 3.3 FLUCTUATING ASYMMETRY COMPONENT ####
+#### 3.3. FLUCTUATING ASYMMETRY COMPONENT ####
 PCA_FA_FGF <- gm.prcomp(gpagen(SYM_FGF$FA.component)$coords)
 classifiers$treatment
 palette()
@@ -205,16 +207,23 @@ summary(ANOVA_FA_FGF)
 cat("ANOVA_FA_FGF", capture.output(summary(ANOVA_ASYM_FGF)), 
     file="./output/ANOVA_Fluctuating_Asymmetry_FGF.txt", sep="\n", append=TRUE)
 
-#### 3.4 DIRECTIONAL ASYMMETRY COMPONENT ####
+#### 3.4. DIRECTIONAL ASYMMETRY COMPONENT ####
 summary(SYM_FGF)
 SYM_FGF$DA.component # array with side 1 & side 2
 
-#### 3.5 TO DO NEXT ####
+#### 3.5. TO DO NEXT ####
+#### 3.6. PCA ####
 # Make morphs for each component (PCA)
 # Make panels PC1-PC4
 # Make heatmap for DA left vs right
 # Make table with proportion of variance explained by each component
 # Remake PCA plots like Costello comparisons
+
+#### 3.7. CVA ####
+# Same as above
+
+
+#### 4. MIRRORING ####
 
 # Mirror each side of the face, so double up on specs, run GMM on these new datasets, by treatment
 # We will end up with these funny-looking specimens, 4 treatments (CTRL-left, CTRL-right, MUT-left, MUT-right)

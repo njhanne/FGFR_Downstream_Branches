@@ -1,0 +1,18 @@
+INTEGRATION on the face comparison - CTRL vs TREATMENT
+
+Effect sizes
+
+    CTRL   TRIPLE 
+3.736433 4.853838 
+
+Effect sizes for pairwise differences in PLS effect size
+
+            CTRL    TRIPLE
+CTRL   0.0000000 0.5124314
+TRIPLE 0.5124314 0.0000000
+
+P-values
+
+            CTRL    TRIPLE
+CTRL   1.0000000 0.6083491
+TRIPLE 0.6083491 1.0000000

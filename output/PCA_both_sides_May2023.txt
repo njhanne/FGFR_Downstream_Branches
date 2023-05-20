@@ -1,0 +1,73 @@
+PCA shape variables raw - both sides mirrored
+
+Ordination type: Principal Component Analysis 
+Centering by OLS mean
+Orthogonal projection of OLS residuals
+Number of observations: 108 
+Number of vectors 107 
+
+Importance of Components:
+                            Comp1      Comp2       Comp3       Comp4       Comp5       Comp6        Comp7        Comp8
+Eigenvalues            0.06095194 0.01013799 0.006188485 0.005345623 0.002198078 0.001229016 0.0008390767 0.0006506394
+Proportion of Variance 0.65955252 0.10970177 0.066964738 0.057844249 0.023785103 0.013299013 0.0090795329 0.0070404791
+Cumulative Proportion  0.65955252 0.76925429 0.836219030 0.894063279 0.917848382 0.931147395 0.9402269281 0.9472674072
+                              Comp9       Comp10       Comp11      Comp12       Comp13       Comp14       Comp15
+Eigenvalues            0.0005520241 0.0004630278 0.0004000318 0.000351215 0.0003325102 0.0002760427 0.0002334049
+Proportion of Variance 0.0059733772 0.0050103605 0.0043286894 0.003800449 0.0035980470 0.0029870201 0.0025256420
+Cumulative Proportion  0.9532407844 0.9582511449 0.9625798343 0.966380284 0.9699783305 0.9729653506 0.9754909926
+                             Comp16       Comp17       Comp18       Comp19       Comp20      Comp21       Comp22
+Eigenvalues            0.0002043679 0.0001827155 0.0001690794 0.0001533774 0.0001422699 0.000127749 0.0001111051
+Proportion of Variance 0.0022114370 0.0019771391 0.0018295844 0.0016596757 0.0015394828 0.001382355 0.0012022534
+Cumulative Proportion  0.9777024296 0.9796795687 0.9815091532 0.9831688288 0.9847083116 0.986090666 0.9872929198
+                             Comp23       Comp24       Comp25       Comp26       Comp27       Comp28       Comp29
+Eigenvalues            9.835801e-05 9.685793e-05 0.0000868759 8.104686e-05 6.520197e-05 6.103054e-05 6.007679e-05
+Proportion of Variance 1.064318e-03 1.048086e-03 0.0009400722 8.769969e-04 7.055415e-04 6.604030e-04 6.500827e-04
+Cumulative Proportion  9.883572e-01 9.894053e-01 0.9903453967 9.912224e-01 9.919279e-01 9.925883e-01 9.932384e-01
+                             Comp30       Comp31       Comp32       Comp33       Comp34       Comp35       Comp36
+Eigenvalues            5.139792e-05 4.315989e-05 0.0000421630 3.521688e-05 3.215713e-05 2.923853e-05 2.845408e-05
+Proportion of Variance 5.561698e-04 4.670272e-04 0.0004562401 3.810770e-04 3.479678e-04 3.163861e-04 3.078977e-04
+Cumulative Proportion  9.937946e-01 9.942616e-01 0.9947178579 9.950989e-01 9.954469e-01 9.957633e-01 9.960712e-01
+                             Comp37       Comp38       Comp39       Comp40       Comp41       Comp42       Comp43
+Eigenvalues            2.517928e-05 2.280709e-05 2.180489e-05 2.060177e-05 1.996012e-05 1.840093e-05 1.729619e-05
+Proportion of Variance 2.724615e-04 2.467924e-04 2.359477e-04 2.229290e-04 2.159857e-04 1.991139e-04 1.871597e-04
+Cumulative Proportion  9.963436e-01 9.965904e-01 9.968264e-01 9.970493e-01 9.972653e-01 9.974644e-01 9.976516e-01
+                             Comp44       Comp45       Comp46       Comp47       Comp48       Comp49       Comp50
+Eigenvalues            1.584065e-05 1.453386e-05 1.333332e-05 1.258155e-05 1.103902e-05 1.024791e-05 9.454168e-06
+Proportion of Variance 1.714095e-04 1.572689e-04 1.442781e-04 1.361432e-04 1.194517e-04 1.108912e-04 1.023022e-04
+Cumulative Proportion  9.978230e-01 9.979803e-01 9.981245e-01 9.982607e-01 9.983801e-01 9.984910e-01 9.985933e-01
+                             Comp51       Comp52       Comp53       Comp54       Comp55       Comp56       Comp57
+Eigenvalues            9.153324e-06 8.525600e-06 7.498954e-06 7.280540e-06 6.759376e-06 6.420732e-06 6.171189e-06
+Proportion of Variance 9.904686e-05 9.225435e-05 8.114514e-05 7.878172e-05 7.314228e-05 6.947786e-05 6.677759e-05
+Cumulative Proportion  9.986924e-01 9.987846e-01 9.988658e-01 9.989445e-01 9.990177e-01 9.990872e-01 9.991539e-01
+                             Comp58       Comp59       Comp60       Comp61       Comp62       Comp63       Comp64
+Eigenvalues            5.461377e-06 5.331308e-06 5.006446e-06 4.725636e-06 4.214351e-06 4.067911e-06 3.743051e-06
+Proportion of Variance 5.909681e-05 5.768935e-05 5.417406e-05 5.113546e-05 4.560291e-05 4.401830e-05 4.050304e-05
+Cumulative Proportion  9.992130e-01 9.992707e-01 9.993249e-01 9.993760e-01 9.994216e-01 9.994657e-01 9.995062e-01
+                             Comp65       Comp66       Comp67       Comp68       Comp69       Comp70       Comp71
+Eigenvalues            3.557591e-06 3.201530e-06 2.915845e-06 2.852006e-06 2.739773e-06 2.419149e-06 2.403628e-06
+Proportion of Variance 3.849621e-05 3.464331e-05 3.155195e-05 3.086117e-05 2.964670e-05 2.617727e-05 2.600933e-05
+Cumulative Proportion  9.995447e-01 9.995793e-01 9.996109e-01 9.996417e-01 9.996714e-01 9.996975e-01 9.997236e-01
+                             Comp72       Comp73       Comp74       Comp75       Comp76       Comp77       Comp78
+Eigenvalues            2.059374e-06 1.989920e-06 1.956642e-06 1.583439e-06 1.549509e-06 1.446903e-06 1.316437e-06
+Proportion of Variance 2.228420e-05 2.153265e-05 2.117256e-05 1.713418e-05 1.676702e-05 1.565674e-05 1.424498e-05
+Cumulative Proportion  9.997458e-01 9.997674e-01 9.997885e-01 9.998057e-01 9.998224e-01 9.998381e-01 9.998523e-01
+                             Comp79       Comp80       Comp81       Comp82       Comp83       Comp84       Comp85
+Eigenvalues            1.226577e-06 1.033947e-06 9.965063e-07 9.724038e-07 8.914752e-07 7.963176e-07 7.791608e-07
+Proportion of Variance 1.327262e-05 1.118820e-05 1.078306e-05 1.052225e-05 9.646530e-06 8.616843e-06 8.431192e-06
+Cumulative Proportion  9.998656e-01 9.998768e-01 9.998876e-01 9.998981e-01 9.999078e-01 9.999164e-01 9.999248e-01
+                             Comp86       Comp87       Comp88       Comp89       Comp90       Comp91       Comp92
+Eigenvalues            7.451201e-07 6.545182e-07 6.389359e-07 5.573603e-07 5.336628e-07 4.955877e-07 4.796164e-07
+Proportion of Variance 8.062842e-06 7.082451e-06 6.913837e-06 6.031119e-06 5.774692e-06 5.362687e-06 5.189863e-06
+Cumulative Proportion  9.999329e-01 9.999400e-01 9.999469e-01 9.999529e-01 9.999587e-01 9.999640e-01 9.999692e-01
+                             Comp93       Comp94       Comp95       Comp96       Comp97       Comp98       Comp99
+Eigenvalues            4.331313e-07 4.092875e-07 3.473361e-07 2.574282e-07 2.254846e-07 2.127428e-07 1.837967e-07
+Proportion of Variance 4.686854e-06 4.428844e-06 3.758476e-06 2.785595e-06 2.439938e-06 2.302060e-06 1.988838e-06
+Cumulative Proportion  9.999739e-01 9.999783e-01 9.999821e-01 9.999849e-01 9.999873e-01 9.999896e-01 9.999916e-01
+                            Comp100      Comp101      Comp102      Comp103      Comp104      Comp105      Comp106
+Eigenvalues            1.657526e-07 1.443975e-07 1.189354e-07 9.778642e-08 8.161415e-08 7.282991e-08 5.411817e-08
+Proportion of Variance 1.793586e-06 1.562506e-06 1.286983e-06 1.058133e-06 8.831355e-07 7.880824e-07 5.856052e-07
+Cumulative Proportion  9.999934e-01 9.999950e-01 9.999963e-01 9.999973e-01 9.999982e-01 9.999990e-01 9.999996e-01
+                            Comp107
+Eigenvalues            3.955049e-08
+Proportion of Variance 4.279704e-07
+Cumulative Proportion  1.000000e+00
