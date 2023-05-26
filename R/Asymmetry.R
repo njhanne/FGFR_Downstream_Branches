@@ -487,6 +487,39 @@ gdf_mirrored <- geomorph.data.frame(GPA_mirrored_double,
                                 treatment_mirror = classifiers_mirrored$treatment_mirror, 
                                 Pdist = Pdist)
 
+ggplot_df <- as.data.frame(cbind(as.character(gdf_mirrored$treatment_mirror), 
+                                 as.character(gdf_mirrored$treatment), 
+                                 as.character(gdf_mirrored$Pdist)))
+colnames(ggplot_df) <- c("treatment_mirror", "treatment", "Pdist")
+
+row.names(ggplot_df) <- dimnames(gdf_mirrored$coords)[[3]]
+
+head(ggplot_df)
+
+ggplot_df$treatment <- as.factor(ggplot_df$treatment)
+ggplot_df$treatment_mirror <- as.factor(ggplot_df$treatment_mirror)
+ggplot_df$Pdist <- as.numeric(as.character(ggplot_df$Pdist))
+
+str(ggplot_df)
+
+
+pdf("./figs/Pdist_treatment_mirrored.pdf", width = 6.5, height = 6.5)
+ggplot(ggplot_df, aes(Pdist, fill = treatment_mirror)) +
+  scale_fill_manual(values = c("navy", "darkorange", "cornflowerblue", "goldenrod1")) + geom_density(alpha = 0.75) + 
+  ggtitle("Procrustes distances head shape - mirrored") + xlab("Procrustes distance") + ylab("Relative density") +
+  theme(plot.title = element_text(size = 15, face = "bold"), axis.text.x = element_text(size = 10),
+        axis.title = element_text(size = 12, face = "bold"), legend.text=element_text(size=10), 
+        legend.title=element_text(size=12, face = "bold"))
+dev.off()
+
+png("./figs/Pdist_treatment_mirrored.png", width = 650, height = 650)
+ggplot(ggplot_df, aes(Pdist, fill = treatment_mirror)) +
+  scale_fill_manual(values = c("navy", "darkorange", "cornflowerblue", "goldenrod1")) + geom_density(alpha = 0.75) + 
+  ggtitle("Procrustes distances head shape - mirrored") + xlab("Procrustes distance") + ylab("Relative density") +
+  theme(plot.title = element_text(size = 15, face = "bold"), axis.text.x = element_text(size = 10),
+        axis.title = element_text(size = 12, face = "bold"), legend.text=element_text(size=10), 
+        legend.title=element_text(size=12, face = "bold"))
+dev.off()
 
 
 # 5. MORPHS MIRRORING ####
