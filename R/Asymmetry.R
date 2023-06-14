@@ -211,6 +211,10 @@ cat("ANOVA_FA_FGF", capture.output(summary(ANOVA_ASYM_FGF)),
 summary(SYM_FGF)
 SYM_FGF$DA.component # array with side 1 & side 2
 
+ANOVA_DA_FGF  <- procD.lm(SYM_FGF$DA.component ~ classifiers$treatment, 
+                          iter=999, RRPP=TRUE, print.progress = FALSE)
+summary(ANOVA_FA_FGF)
+
 #### 3.5. TO DO NEXT ####
 #### 3.6. PCA ####
 # Make morphs for each component (PCA)
@@ -268,10 +272,10 @@ atlas_head_lm <- head_array[,, which(dimnames(head_array)[[3]] == "chick_ctr_23"
 
 
 # 4.2 FIND LANDMARK PAIRS ####
-?detect.symmetry
-detect.symmetry(GPA_geomorph$coords, sym.plane = "yz", plot = TRUE)
-detect.symmetry(head_array[1:33,,], sym.plane = "yz", plot = TRUE)
-detect.symmetry(head_array[,,], sym.plane = "yz", plot = TRUE)
+# ?detect.symmetry
+# detect.symmetry(GPA_geomorph$coords, sym.plane = "yz", plot = TRUE)
+# detect.symmetry(head_array[1:33,,], sym.plane = "yz", plot = TRUE)
+# detect.symmetry(head_array[,,], sym.plane = "yz", plot = TRUE)
 
 
 non.sym <- c(9, 10, 13:15)
@@ -405,6 +409,14 @@ legend("bottomright", pch = 19, col = palette(), legend = levels(classifiers_mir
 title("PCA of shape coordinates - mirrored side and treatment")
 dev.off()
 
+t<- geomorph.data.frame(GPA_mirrored_double, treatment = classifiers_mirrored$treatment_mirror, Pdist = Pdist)
+
+ANOVA_both_mirrored  <- procD.lm(coords ~ treatment, data=t, 
+                          iter=999, RRPP=TRUE, print.progress = FALSE)
+summary(ANOVA_both_mirrored)
+ANOVA_both_mirrored_pw <- pairwise(ANOVA_both_mirrored, groups = t$treatment)
+summary(ANOVA_both_mirrored_pw)
+
 # 4.5. PCA Left side ####
 
 PCA_LEFT_May2023 <- gm.prcomp(GPA_mirrored_LEFT$coords)
@@ -439,8 +451,11 @@ legend("bottomright", pch = 19, col = palette(), legend = levels(classifiers$tre
 title("PCA of shape coordinates - mirrored LEFT and treatment")
 dev.off()
 
+t_LEFT <- geomorph.data.frame(GPA_mirrored_LEFT, treatment = classifiers$treatment)
 
-
+ANOVA_LEFT_mirrored  <- procD.lm(coords ~ treatment, data=t_LEFT, 
+                                 iter=999, RRPP=TRUE, print.progress = FALSE)
+summary(ANOVA_LEFT_mirrored)
 
 
 # 4.6. Right side ####
@@ -476,6 +491,12 @@ ordiellipse(PCA_RIGHT_May2023, classifiers$treatment, kind="ehull",conf=0.95, co
 legend("bottomright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
 title("PCA of shape coordinates - mirrored RIGHT and treatment")
 dev.off()
+
+t_RIGHT <- geomorph.data.frame(GPA_mirrored_RIGHT, treatment = classifiers$treatment)
+
+ANOVA_RIGHT_mirrored  <- procD.lm(coords ~ treatment, data=t_RIGHT, 
+                                 iter=999, RRPP=TRUE, print.progress = FALSE)
+summary(ANOVA_RIGHT_mirrored)
 
 # 4.7. Procrustes distance ####
 
