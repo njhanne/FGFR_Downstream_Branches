@@ -1,0 +1,16 @@
+ply
+format binary_little_endian 1.0
+element vertex 0 
+property float x
+property float y
+property float z
+property float red
+property float green
+property float blue
+property float alpha
+property float nx
+property float ny
+property float nz
+element face 0 
+property list int int vertex_indices
+end_header

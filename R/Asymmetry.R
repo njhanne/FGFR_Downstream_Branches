@@ -2,9 +2,9 @@
 library(rgl)
 library(geomorph)
 library(devtools)
-install_github("marta-vidalgarcia/morpho.tools.GM", force = TRUE)
+# install_github("marta-vidalgarcia/morpho.tools.GM", force = TRUE)
 library(morpho.tools.GM)
-install_github("marta-vidalgarcia/symmetry")
+# install_github("marta-vidalgarcia/symmetry")
 library(symmetry)
 library(mesh_process)
 library(Morpho)
@@ -13,7 +13,7 @@ library(magick)
 library(Evomorph)
 library(ggplot2)
 library(vegan)
-install_github("vqv/ggbiplot")
+# install_github("vqv/ggbiplot")
 library(ggbiplot)
 library(factoextra)
 library(gt)
@@ -126,6 +126,7 @@ legend("bottomleft", pch = 19, col = palette(), legend = levels(classifiers$trea
 title("PCA FGF SYMMETRIC COMPONENT")
 dev.off()
 
+# this gives pvalue used in manuscript for symmetric shape change
 ANOVA_ALL_sym <- procD.lm(SYM_FGF$symm.shape ~ classifiers$treatment, 
                           iter=999, RRPP=TRUE, print.progress = FALSE)
 summary(ANOVA_ALL_sym)
@@ -163,6 +164,7 @@ dev.off()
 
 identify(x = PCA_ASYM_FGF$x[,1], y = PCA_ASYM_FGF$x[,2], labels=row.names(PCA_ASYM_FGF$x))
 
+# this is pvalue used in manuscript or asymmetry
 ANOVA_ASYM_FGF  <- procD.lm(SYM_FGF$asymm.shape ~ classifiers$treatment, 
                             iter=999, RRPP=TRUE, print.progress = FALSE)
 summary(ANOVA_ASYM_FGF)
@@ -200,7 +202,7 @@ dev.off()
 
 # identify(x = PCA_FA_FGF$x[,1], y = PCA_FA_FGF$x[,2], labels=row.names(PCA_FA_FGF$x))
 
-
+# this is the floating asymmetry pvalue
 ANOVA_FA_FGF  <- procD.lm(SYM_FGF$FA.component ~ classifiers$treatment, 
                           iter=999, RRPP=TRUE, print.progress = FALSE)
 summary(ANOVA_FA_FGF)
@@ -211,9 +213,10 @@ cat("ANOVA_FA_FGF", capture.output(summary(ANOVA_ASYM_FGF)),
 summary(SYM_FGF)
 SYM_FGF$DA.component # array with side 1 & side 2
 
+# this doesn't work, may be on purpose but should ask Marta
 ANOVA_DA_FGF  <- procD.lm(SYM_FGF$DA.component ~ classifiers$treatment, 
                           iter=999, RRPP=TRUE, print.progress = FALSE)
-summary(ANOVA_FA_FGF)
+summary(ANOVA_DA_FGF)
 
 #### 3.5. TO DO NEXT ####
 #### 3.6. PCA ####
@@ -339,8 +342,8 @@ plot3d(array_side1_mirrored[,,27], col = "chartreuse", type = "s", aspect = "iso
        size = 0.75, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
 
 # Change dimnames so we know which way they were mirrored
-dimnames(array_side1_mirrored)[[3]] <- paste0("LEFT_", dimnames(array_side1_mirrored)[[3]])
-dimnames(array_side2_mirrored)[[3]] <- paste0("RIGHT_", dimnames(array_side2_mirrored)[[3]])
+dimnames(array_side1_mirrored)[[3]] <- paste0("contralateral_", dimnames(array_side1_mirrored)[[3]])
+dimnames(array_side2_mirrored)[[3]] <- paste0("treated_", dimnames(array_side2_mirrored)[[3]])
 
 # And join both arrays
 
@@ -354,8 +357,8 @@ classifiers_mirrored <- rbind(classifiers, classifiers)
 row.names(classifiers_mirrored) <- dimnames(mirrored_array)[[3]]
 classifiers_mirrored$id <- dimnames(mirrored_array)[[3]]
 classifiers_mirrored$treatment_mirror <- vector(mode = "character", length = dim(classifiers_mirrored)[1])
-classifiers_mirrored$treatment_mirror[1:dim(classifiers)[1]] <- paste0("LEFT_", classifiers_mirrored$treatment[1:dim(classifiers)[1]])
-classifiers_mirrored$treatment_mirror[(1+dim(classifiers)[1]):dim(classifiers_mirrored)[1]] <- paste0("RIGHT_", classifiers_mirrored$treatment[(1+dim(classifiers)[1]):dim(classifiers_mirrored)[1]])
+classifiers_mirrored$treatment_mirror[1:dim(classifiers)[1]] <- paste0("contra_", classifiers_mirrored$treatment[1:dim(classifiers)[1]])
+classifiers_mirrored$treatment_mirror[(1+dim(classifiers)[1]):dim(classifiers_mirrored)[1]] <- paste0("treat_", classifiers_mirrored$treatment[(1+dim(classifiers)[1]):dim(classifiers_mirrored)[1]])
 
 classifiers_mirrored$treatment_mirror <- as.factor(classifiers_mirrored$treatment_mirror)
 
@@ -365,138 +368,140 @@ surface_semis <- c(34:51)
 GPA_mirrored_double <- geomorph::gpagen(A = mirrored_array*c(GPA_geomorph$Csize,GPA_geomorph$Csize), curves = as.matrix(curveslide_all), 
                                         surfaces = surface_semis)
 
-GPA_mirrored_LEFT <- geomorph::gpagen(A = mirrored_array[,,1:dim(array_side1_mirrored)[3]]*GPA_geomorph$Csize, curves = as.matrix(curveslide_all), 
+GPA_mirrored_contra <- geomorph::gpagen(A = mirrored_array[,,1:dim(array_side1_mirrored)[3]]*GPA_geomorph$Csize, curves = as.matrix(curveslide_all), 
                                       surfaces = surface_semis)
-GPA_mirrored_RIGHT <- geomorph::gpagen(A = mirrored_array[,,(1+dim(array_side1_mirrored)[3]):dim(mirrored_array)[3]]*GPA_geomorph$Csize, curves = as.matrix(curveslide_all), 
+GPA_mirrored_treat <- geomorph::gpagen(A = mirrored_array[,,(1+dim(array_side1_mirrored)[3]):dim(mirrored_array)[3]]*GPA_geomorph$Csize, curves = as.matrix(curveslide_all), 
                                        surfaces = surface_semis)
 
-saveRDS(mirrored_array, "./data/mirrored_array_both_sides_May2023.rds")
-saveRDS(GPA_mirrored_double, "./data/mirrored_array_both_sides_May2023.rds")
-saveRDS(GPA_mirrored_LEFT, "./data/mirrored_array_LEFT_May2023.rds")
-saveRDS(GPA_mirrored_RIGHT, "./data/mirrored_array_RIGHT_May2023.rds")
-write.csv(classifiers_mirrored, "./data/classifiers_mirrored_both_sides_May2023.csv")
+saveRDS(mirrored_array, "./data/mirrored_array_both_sides.rds")
+saveRDS(GPA_mirrored_double, "./data/mirrored_gpa_both_sides.rds")
+saveRDS(GPA_mirrored_contra, "./data/mirrored_gpa_contralateral.rds")
+saveRDS(GPA_mirrored_treat, "./data/mirrored_gpa_treated.rds")
+write.csv(classifiers_mirrored, "./data/classifiers_mirrored_both_sides.csv")
 
 # Both sides
-PCA_both_sides_May2023 <- gm.prcomp(GPA_mirrored_double$coords)
-summary(PCA_both_sides_May2023)
-str(PCA_both_sides_May2023)
+PCA_both_sides <- gm.prcomp(GPA_mirrored_double$coords)
+summary(PCA_both_sides)
+str(PCA_both_sides)
 
 # Delete file if it exists
-if (file.exists("./output/PCA_both_sides_May2023.txt")) {
-  file.remove("./output/PCA_both_sides_May2023.txt")
+if (file.exists("./output/PCA_both_sides.txt")) {
+  file.remove("./output/PCA_both_sides.txt")
 }
-cat("PCA shape variables raw - both sides mirrored", capture.output(summary(PCA_both_sides_May2023)), 
-    file="./output/PCA_both_sides_May2023.txt", sep="\n", append=TRUE)
+cat("PCA shape variables raw - both sides mirrored", capture.output(summary(PCA_both_sides)), 
+    file="./output/PCA_both_sides.txt", sep="\n", append=TRUE)
 
 
 levels(classifiers_mirrored$treatment_mirror)
 palette(c("navy", "darkorange", "cornflowerblue", "goldenrod1"))
 
-pdf("./figs/PCA_head_shape_treatment_sides_May2023.pdf", width = 8.25, height = 6)
-plot(PCA_both_sides_May2023, pch = 19, col = classifiers_mirrored$treatment_mirror, cex = 1.25)
-ordiellipse(PCA_both_sides_May2023, classifiers_mirrored$treatment_mirror, kind="ehull",conf=0.95, col = palette(),
+pdf("./figs/PCA_head_shape_treatment_sides.pdf", width = 8.25, height = 6)
+plot(PCA_both_sides, pch = 19, col = classifiers_mirrored$treatment_mirror, cex = 1.25)
+ordiellipse(PCA_both_sides, classifiers_mirrored$treatment_mirror, kind="ehull",conf=0.95, col = palette(),
             draw = "polygon", alpha = 0.2, lty = 0)
 legend("bottomright", pch = 19, col = palette(), legend = levels(classifiers_mirrored$treatment_mirror))
 title("PCA of shape coordinates - mirrored side and treatment")
 dev.off()
 
 
-png("./figs/PCA_head_shape_treatment_sides_May2023.png", width = 750, height = 600)
-plot(PCA_both_sides_May2023, pch = 19, col = classifiers_mirrored$treatment_mirror, cex = 1.25)
-ordiellipse(PCA_both_sides_May2023, classifiers_mirrored$treatment_mirror, kind="ehull",conf=0.95, col = palette(),
+png("./figs/PCA_head_shape_treatment_sides.png", width = 750, height = 600)
+plot(PCA_both_sides, pch = 19, col = classifiers_mirrored$treatment_mirror, cex = 1.25)
+ordiellipse(PCA_both_sides, classifiers_mirrored$treatment_mirror, kind="ehull",conf=0.95, col = palette(),
             draw = "polygon", alpha = 0.2, lty = 0)
 legend("bottomright", pch = 19, col = palette(), legend = levels(classifiers_mirrored$treatment_mirror))
 title("PCA of shape coordinates - mirrored side and treatment")
 dev.off()
 
-t<- geomorph.data.frame(GPA_mirrored_double, treatment = classifiers_mirrored$treatment_mirror, Pdist = Pdist)
+Pdist <- ShapeDist(GPA_mirrored_double$coords, GPA_mirrored_double$consensus)
+t <- geomorph.data.frame(GPA_mirrored_double, treatment = classifiers_mirrored$treatment_mirror, Pdist = Pdist)
 
 ANOVA_both_mirrored  <- procD.lm(coords ~ treatment, data=t, 
                           iter=999, RRPP=TRUE, print.progress = FALSE)
 summary(ANOVA_both_mirrored)
 ANOVA_both_mirrored_pw <- pairwise(ANOVA_both_mirrored, groups = t$treatment)
+# these are pvalues used in manuscript
 summary(ANOVA_both_mirrored_pw)
 
 # 4.5. PCA Left side ####
 
-PCA_LEFT_May2023 <- gm.prcomp(GPA_mirrored_LEFT$coords)
-summary(PCA_LEFT_May2023)
-str(PCA_LEFT_May2023)
+PCA_contra <- gm.prcomp(GPA_mirrored_contra$coords)
+summary(PCA_contra)
+str(PCA_contra)
 
 # Delete file if it exists
-if (file.exists("./output/PCA_LEFT_May2023.txt")) {
-  file.remove("./output/PCA_LEFT_May2023.txt")
+if (file.exists("./output/PCA_contra.txt")) {
+  file.remove("./output/PCA_contra.txt")
 }
-cat("PCA shape variables raw - LEFT side mirrored", capture.output(summary(PCA_LEFT_May2023)), 
-    file="./output/PCA_LEFT_May2023.txt", sep="\n", append=TRUE)
+cat("PCA shape variables raw - contralateral side mirrored", capture.output(summary(PCA_contra)), 
+    file="./output/PCA_contra.txt", sep="\n", append=TRUE)
 
 
 levels(classifiers$treatment)
 palette(c("navy", "darkorange"))
 
-pdf("./figs/PCA_head_shape_treatment_mirrored_LEFT_May2023.pdf", width = 8.25, height = 6)
-plot(PCA_LEFT_May2023, pch = 19, col = classifiers$treatment, cex = 1.25)
-ordiellipse(PCA_LEFT_May2023, classifiers$treatment, kind="ehull",conf=0.95, col = palette(),
+pdf("./figs/PCA_head_shape_treatment_mirrored_contralateral.pdf", width = 8.25, height = 6)
+plot(PCA_contra, pch = 19, col = classifiers$treatment, cex = 1.25)
+ordiellipse(PCA_contra, classifiers$treatment, kind="ehull",conf=0.95, col = palette(),
             draw = "polygon", alpha = 0.2, lty = 0)
 legend("bottomright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
-title("PCA of shape coordinates - mirrored LEFT and treatment")
+title("PCA of shape coordinates - mirrored contralateral side and treatment")
 dev.off()
 
 
-png("./figs/PCA_head_shape_treatment_LEFT_May2023.png", width = 750, height = 600)
-plot(PCA_LEFT_May2023, pch = 19, col = classifiers$treatment, cex = 1.25)
-ordiellipse(PCA_LEFT_May2023, classifiers$treatment, kind="ehull",conf=0.95, col = palette(),
+png("./figs/PCA_head_shape_treatment_contralateral.png", width = 750, height = 600)
+plot(PCA_contra, pch = 19, col = classifiers$treatment, cex = 1.25)
+ordiellipse(PCA_contra, classifiers$treatment, kind="ehull",conf=0.95, col = palette(),
             draw = "polygon", alpha = 0.2, lty = 0)
 legend("bottomright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
-title("PCA of shape coordinates - mirrored LEFT and treatment")
+title("PCA of shape coordinates - mirrored contralateral side and treatment")
 dev.off()
 
-t_LEFT <- geomorph.data.frame(GPA_mirrored_LEFT, treatment = classifiers$treatment)
+t_contra <- geomorph.data.frame(GPA_mirrored_contra, treatment = classifiers$treatment)
 
-ANOVA_LEFT_mirrored  <- procD.lm(coords ~ treatment, data=t_LEFT, 
+ANOVA_contra_mirrored  <- procD.lm(coords ~ treatment, data=t_contra, 
                                  iter=999, RRPP=TRUE, print.progress = FALSE)
-summary(ANOVA_LEFT_mirrored)
+summary(ANOVA_contra_mirrored)
 
 
 # 4.6. Right side ####
 
-PCA_RIGHT_May2023 <- gm.prcomp(GPA_mirrored_RIGHT$coords)
-summary(PCA_RIGHT_May2023)
-str(PCA_RIGHT_May2023)
+PCA_treat <- gm.prcomp(GPA_mirrored_treat$coords)
+summary(PCA_treat)
+str(PCA_treat)
 
 # Delete file if it exists
-if (file.exists("./output/PCA_RIGHT_May2023.txt")) {
-  file.remove("./output/PCA_RIGHT_May2023.txt")
+if (file.exists("./output/PCA_treat.txt")) {
+  file.remove("./output/PCA_treat.txt")
 }
-cat("PCA shape variables raw - RIGHT side mirrored", capture.output(summary(PCA_RIGHT_May2023)), 
-    file="./output/PCA_RIGHT_May2023.txt", sep="\n", append=TRUE)
+cat("PCA shape variables raw - treated side mirrored", capture.output(summary(PCA_treat)), 
+    file="./output/PCA_treat.txt", sep="\n", append=TRUE)
 
 
 levels(classifiers$treatment)
 palette(c("cornflowerblue", "goldenrod1"))
 
-pdf("./figs/PCA_head_shape_treatment_mirrored_RIGHT_May2023.pdf", width = 8.25, height = 6)
-plot(PCA_RIGHT_May2023, pch = 19, col = classifiers$treatment, cex = 1.25)
-ordiellipse(PCA_RIGHT_May2023, classifiers$treatment, kind="ehull",conf=0.95, col = palette(),
+pdf("./figs/PCA_head_shape_treatment_mirrored_treated.pdf", width = 8.25, height = 6)
+plot(PCA_treat, pch = 19, col = classifiers$treatment, cex = 1.25)
+ordiellipse(PCA_treat, classifiers$treatment, kind="ehull",conf=0.95, col = palette(),
             draw = "polygon", alpha = 0.2, lty = 0)
 legend("bottomright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
-title("PCA of shape coordinates - mirrored RIGHT and treatment")
+title("PCA of shape coordinates - mirrored treated side and treatment")
 dev.off()
 
 
-png("./figs/PCA_head_shape_treatment_RIGHT_May2023.png", width = 750, height = 600)
-plot(PCA_RIGHT_May2023, pch = 19, col = classifiers$treatment, cex = 1.25)
-ordiellipse(PCA_RIGHT_May2023, classifiers$treatment, kind="ehull",conf=0.95, col = palette(),
+png("./figs/PCA_head_shape_treatment_treated.png", width = 750, height = 600)
+plot(PCA_treat, pch = 19, col = classifiers$treatment, cex = 1.25)
+ordiellipse(PCA_treat, classifiers$treatment, kind="ehull",conf=0.95, col = palette(),
             draw = "polygon", alpha = 0.2, lty = 0)
 legend("bottomright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
-title("PCA of shape coordinates - mirrored RIGHT and treatment")
+title("PCA of shape coordinates - mirrored treated side and treatment")
 dev.off()
 
-t_RIGHT <- geomorph.data.frame(GPA_mirrored_RIGHT, treatment = classifiers$treatment)
+t_treat <- geomorph.data.frame(GPA_mirrored_treat, treatment = classifiers$treatment)
 
-ANOVA_RIGHT_mirrored  <- procD.lm(coords ~ treatment, data=t_RIGHT, 
+ANOVA_treat_mirrored  <- procD.lm(coords ~ treatment, data=t_treat, 
                                  iter=999, RRPP=TRUE, print.progress = FALSE)
-summary(ANOVA_RIGHT_mirrored)
+summary(ANOVA_treat_mirrored)
 
 # 4.7. Procrustes distance ####
 
@@ -545,6 +550,7 @@ dev.off()
 
 # 5. MORPHS MIRRORING ####
 load("./figs/RGL_head_heatmaps_pos.rdata")
+load("./data/RGL_head_pos.rdata")
 # frontal <- par3d()$userMatrix
 # 
 # rgl.close()
@@ -565,78 +571,78 @@ levels(gdf_mirrored$treatment_mirror)
 # LEFT_triple_mean_shape <- mshape(mirrored_array[,,which(gdf_mirrored$treatment_mirror == "LEFT_triple")])
 # RIGHT_triple_mean_shape <- mshape(mirrored_array[,,which(gdf_mirrored$treatment_mirror == "RIGHT_triple")])
 
-LEFT_control_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "LEFT_control")])
-RIGHT_control_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "RIGHT_control")])
-LEFT_triple_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "LEFT_triple")])
-RIGHT_triple_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "RIGHT_triple")])
+contra_DMSO_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "contra_control")])
+treat_DMSO_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "treat_control")])
+contra_triple_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "contra_triple")])
+treat_triple_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "treat_triple")])
 
 
 
 # Create morphed meshes
-LEFT_control_mesh <- tps3d(head_lowres, as.matrix(atlas_head_lm), LEFT_control_mean_shape, threads = 1)
-RIGHT_control_mesh <- tps3d(head_lowres, as.matrix(atlas_head_lm), RIGHT_control_mean_shape, threads = 1)
-LEFT_triple_mesh <- tps3d(head_lowres, as.matrix(atlas_head_lm), LEFT_triple_mean_shape, threads = 1)
-RIGHT_triple_mesh <- tps3d(head_lowres, as.matrix(atlas_head_lm), RIGHT_triple_mean_shape, threads = 1)
+contra_DMSO_mesh <- tps3d(head_lowres, as.matrix(atlas_head_lm), contra_DMSO_mean_shape, threads = 1)
+treat_DMSO_mesh <- tps3d(head_lowres, as.matrix(atlas_head_lm), treat_DMSO_mean_shape, threads = 1)
+contra_triple_mesh <- tps3d(head_lowres, as.matrix(atlas_head_lm), contra_triple_mean_shape, threads = 1)
+treat_triple_mesh <- tps3d(head_lowres, as.matrix(atlas_head_lm), treat_triple_mean_shape, threads = 1)
 
 
 # Plot morphs
 open3d(zoom=0.75, windowRect = c(0,0, 1000, 700), userMatrix = frontal)
 rgl.pop("lights")
 light3d(specular="black")
-shade3d(LEFT_control_mesh, color="gray", alpha=0.9)
-rgl.snapshot("./figs/Morph_LEFT_control_frontal_head.png", top = TRUE)
-writePLY("./output/LEFT_control_mesh.ply")
+shade3d(contra_DMSO_mesh, color="gray", alpha=0.9)
+rgl.snapshot("./figs/Morph_contralateral_DMSO_frontal_head.png", top = TRUE)
+writePLY("./output/contralateral_DMSO_mesh.ply")
 rgl.close()
 
 open3d(zoom=0.75, windowRect = c(0,0, 1000, 700), userMatrix = frontal)
 rgl.pop("lights")
 light3d(specular="black")
 shade3d(RIGHT_control_mesh, color="gray", alpha=0.9)
-rgl.snapshot("./figs/Morph_RIGHT_control_frontal_head.png", top = TRUE)
-writePLY("./output/RIGHT_control_mesh.ply")
+rgl.snapshot("./figs/Morph_treated_DMSO_frontal_head.png", top = TRUE)
+writePLY("./output/treated_DMSO_mesh.ply")
 rgl.close()
 
 open3d(zoom=0.75, windowRect = c(0,0, 1000, 700), userMatrix = frontal)
 rgl.pop("lights")
 light3d(specular="black")
 shade3d(LEFT_triple_mesh, color="gray", alpha=0.9)
-rgl.snapshot("./figs/Morph_LEFT_triple_frontal_head.png", top = TRUE)
-writePLY("./output/LEFT_triple_mesh.ply")
+rgl.snapshot("./figs/Morph_contralateral_triple_frontal_head.png", top = TRUE)
+writePLY("./output/contralateral_triple_mesh.ply")
 rgl.close()
 
 open3d(zoom=0.75, windowRect = c(0,0, 1000, 700), userMatrix = frontal)
 rgl.pop("lights")
 light3d(specular="black")
 shade3d(RIGHT_triple_mesh, color="gray", alpha=0.9)
-rgl.snapshot("./figs/Morph_RIGHT_triple_frontal_head.png", top = TRUE)
-writePLY("./output/RIGHT_triple_mesh.ply")
+rgl.snapshot("./figs/Morph_treated_triple_frontal_head.png", top = TRUE)
+writePLY("./output/treated_triple_mesh.ply")
 rgl.close()
 
 
 # HEATMAPS
 open3d(zoom=0.75, windowRect = c(0,0, 1000, 700), userMatrix = frontal)
 x11(width=1.7, height=8)
-meshDist(LEFT_control_mesh, LEFT_triple_mesh, rampcolors = c("blue", "white", "red"), sign = TRUE)
-rgl.snapshot("./figs/Heatmap_LEFT_ctrl_triple_mirrored_frontal.png", top = TRUE)
-dev.print(pdf, "./figs/Heatmap_LEFT_ctrl_triple_mirrored_scale.pdf", width=2, height=9.5)
+meshDist(contra_DMSO_mesh, contra_triple_mesh, rampcolors = c("blue", "white", "red"), sign = TRUE)
+rgl.snapshot("./figs/Heatmap_contralateral_ctrl-vs-triple_mirrored_frontal.png", top = TRUE)
+dev.print(pdf, "./figs/Heatmap_contralateral_ctrl-vs-triple_mirrored_scale.pdf", width=2, height=9.5)
 dev.off()
 clear3d()
 rgl.close()
 
 open3d(zoom=0.75, windowRect = c(0,0, 1000, 700), userMatrix = frontal)
 x11(width=1.7, height=8)
-meshDist(RIGHT_control_mesh, RIGHT_triple_mesh, rampcolors = c("blue", "white", "red"), sign = TRUE)
-rgl.snapshot("./figs/Heatmap_RIGHT_ctrl_triple_mirrored_frontal.png", top = TRUE)
-dev.print(pdf, "./figs/Heatmap_RIGHT_ctrl_triple_mirrored_scale.pdf", width=2, height=9.5)
+meshDist(treat_DMSO_mesh, treat_triple_mesh, rampcolors = c("blue", "white", "red"), sign = TRUE)
+rgl.snapshot("./figs/Heatmap_treated_ctrl-vs-triple_mirrored_frontal.png", top = TRUE)
+dev.print(pdf, "./figs/Heatmap_treated_ctrl-vs-triple_mirrored_scale.pdf", width=2, height=9.5)
 dev.off()
 clear3d()
 rgl.close()
 
 open3d(zoom=0.75, windowRect = c(0,0, 1000, 700), userMatrix = frontal)
 x11(width=1.7, height=8)
-meshDist(LEFT_control_mesh, RIGHT_control_mesh, rampcolors = c("blue", "white", "red"), sign = TRUE)
-rgl.snapshot("./figs/Heatmap_LEFT_RIGHT_ctrlmirrored_frontal.png", top = TRUE)
-dev.print(pdf, "./figs/Heatmap_LEFT__RIGHT_ctrl_mirrored_scale.pdf", width=2, height=9.5)
+meshDist(contra_DMSO_mesh, treat_DMSO_mesh, rampcolors = c("blue", "white", "red"), sign = TRUE)
+rgl.snapshot("./figs/Heatmap_contra-vs-treat_DMSO_mirrored_frontal.png", top = TRUE)
+dev.print(pdf, "./figs/Heatmap_contra-vs-treat_DMSO_mirrored_scale.pdf", width=2, height=9.5)
 dev.off()
 clear3d()
 rgl.close()
@@ -644,9 +650,9 @@ rgl.close()
 
 open3d(zoom=0.75, windowRect = c(0,0, 1000, 700), userMatrix = frontal)
 x11(width=1.7, height=8)
-meshDist(RIGHT_triple_mesh, LEFT_triple_mesh, rampcolors = c("blue", "white", "red"), sign = TRUE)
-rgl.snapshot("./figs/Heatmap_LEFT_RIGHT_triple_mirrored_frontal.png", top = TRUE)
-dev.print(pdf, "./figs/Heatmap_LEFT__RIGHT_triple_mirrored_scale.pdf", width=2, height=9.5)
+meshDist(treat_triple_mesh, contra_triple_mesh, rampcolors = c("blue", "white", "red"), sign = TRUE)
+rgl.snapshot("./figs/Heatmap_contra-vs-treat_triple_mirrored_frontal.png", top = TRUE)
+dev.print(pdf, "./figs/Heatmap_contra-vs-treat_triple_mirrored_scale.pdf", width=2, height=9.5)
 dev.off()
 clear3d()
 rgl.close()
@@ -657,18 +663,18 @@ rgl.close()
 # Have a look at the heatmap, and change colour if needed
 open3d(zoom=0.75, userMatrix = frontal, windowRect= c(0,0,1000,700))
 x11(width=1.7, height=8)
-PC_min <- tps3d(head_lowres, as.matrix(atlas_head_lm), PCA_both_sides_May2023$shapes[[1]]$min, threads = 1)
-PC_max <- tps3d(head_lowres, as.matrix(atlas_head_lm), PCA_both_sides_May2023$shapes[[1]]$max, threads = 1)
+PC_min <- tps3d(head_lowres, as.matrix(atlas_head_lm), PCA_both_sides$shapes[[1]]$min, threads = 1)
+PC_max <- tps3d(head_lowres, as.matrix(atlas_head_lm), PCA_both_sides$shapes[[1]]$max, threads = 1)
 
 meshDist(PC_min, PC_max, rampcolors = c("darkblue", "blue", "white", "red", "darkred"), sign = TRUE)
 
-summary(PCA_both_sides_May2023)
+summary(PCA_both_sides)
 n_dimensions <- 10 # number of PCs to include in the figure, decide depending on % of variance explained in PCs
 
 # This loop automatically positions faces in frontal only for the 10 PCs
 for (i in 1:n_dimensions){
-  PC_min <- tps3d(head_lowres, as.matrix(atlas_head_lm), PCA_both_sides_May2023$shapes[[i]]$min, threads = 1)
-  PC_max <- tps3d(head_lowres, as.matrix(atlas_head_lm), PCA_both_sides_May2023$shapes[[i]]$max, threads = 1)
+  PC_min <- tps3d(head_lowres, as.matrix(atlas_head_lm), PCA_both_sides$shapes[[i]]$min, threads = 1)
+  PC_max <- tps3d(head_lowres, as.matrix(atlas_head_lm), PCA_both_sides$shapes[[i]]$max, threads = 1)
   PC <- paste0("PC", i)
   
   #frontal views
