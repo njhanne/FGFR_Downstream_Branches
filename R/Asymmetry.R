@@ -773,8 +773,8 @@ side.1 <- c(2,4, 6, 8, 12, 16:24, 34:42) # LEFT
 side.2 <- c(1, 3, 5, 7, 11, 25:33, 43:51) # RIGHT
 
 side <- vector(mode = "character", length = 51)
-side[side.1] <- "left"
-side[side.2] <- "right"
+side[side.1] <- "contralateral"
+side[side.2] <- "treated"
 side <- side[-non.sym]
 
 # Integration face all
@@ -789,6 +789,7 @@ face_integration_CTRL <- integration.test(GPA_geomorph$coords[-non.sym, , which(
 face_integration_TREATMENT <- integration.test(GPA_geomorph$coords[-non.sym, , which(classifiers$treatment == "triple")], 
                                                partition.gp = side, iter = 999)
 
+# these p-values are used in manuscript
 summary(face_integration_CTRL) # Test summary
 summary(face_integration_TREATMENT) # Test summary
 plot(face_integration_CTRL) # PLS plot
