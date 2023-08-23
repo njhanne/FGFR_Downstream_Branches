@@ -3,8 +3,8 @@
 library(rgl)
 library(geomorph)
 library(devtools)
-install_github("marta-vidalgarcia/morpho.tools.GM", force = TRUE)
-# library(morpho.tools.GM)
+# install_github("marta-vidalgarcia/morpho.tools.GM", force = TRUE)
+library(morpho.tools.GM)
 # install_github("marta-vidalgarcia/mesh_process")
 # library(mesh_process)
 library(Morpho)
@@ -13,7 +13,7 @@ library(magick)
 library(Evomorph)
 library(ggplot2)
 library(vegan)
-install_github("vqv/ggbiplot")
+# install_github("vqv/ggbiplot")
 library(ggbiplot)
 library(factoextra)
 library(gt)
@@ -21,6 +21,7 @@ library(abind)
 
 # setwd("~/Documents/GITHUB_repos/FGFR-Branches-GM/")
 # setwd("C:/Users/nhanne/Box/FGF_inhibitor_paper_5-26-2020/Morphology/3D_data")
+setwd("/Users/nhanne/PycharmProjects/FGFR-Branches-GM")
 
 # # Create directories.
 ### WILL IT WORK ON WINDOWS???
@@ -256,6 +257,7 @@ row.names(outlier$All_Proc_d[which(outlier$All_Proc_d$`Proc. d. from mean` == mi
 #### 3. ATLAS HEAD & PLOTS ####
 # (hypervolume) - which means the smalles Procrustes distance, (3) use the set of LMs & mesh of that specimen
 head_mesh <- geomorph::read.ply("./data/ATLAS_chick_ctr_23_smooth_ascii_no_back.ply") # Not sure what is wrong with this mesh
+head_mesh <- geomorph::read.ply("./data/ATLAS_chick_ctr_23_smooth_ascii_only_face.ply")
 head_lowres <- vcgQEdecim(head_mesh, percent = 0.15)
 
 atlas_head_lm <- head_array[,, which(dimnames(head_array)[[3]] == "chick_ctr_23")]
@@ -296,11 +298,18 @@ rgl::rgl.close()
 
 # Frontal view
 open3d(zoom = 0.75, userMatrix = frontal, windowRect = c(0, 0, 1000, 700)) 
-rgl::shade3d(head_mesh, color = "gray", alpha =0.9)
-rgl::plot3d(atlas_head_lm[head_fixed.lm,], aspect = "iso", type = "s", size=1.2, col = "darkblue", add = T)
-rgl::plot3d(atlas_head_lm[head_curves.lm,], aspect = "iso", type = "s", size=0.75, col = "orange", add = T)
-rgl::plot3d(atlas_head_lm[head_surface.lm,], aspect = "iso", type = "s", size=0.6, col = "turquoise2", add = T)
+rgl::shade3d(head_mesh, color = "gray", alpha =1,specular = "black" )
+# material3d(shininess = 0)
+# rgl::pop3d('lights')
+# light3d(x = -50, y = 100, z = 100, ambient = "black")
+# rgl::light3d(phi = 75)
+# rgl::light3d(phi = -15, theta = 60)
+# rgl::light3d(phi = -15, theta = -80)
+rgl::plot3d(atlas_head_lm[head_fixed.lm,], aspect = "iso", type = "s", size=.8, col = "black", add = T)
+rgl::plot3d(atlas_head_lm[head_curves.lm,], aspect = "iso", type = "s", size=0.8, col = "orange", add = T)
+rgl::plot3d(atlas_head_lm[head_surface.lm,], aspect = "iso", type = "s", size=0.8, col = "turquoise2", add = T)
 rgl::rgl.snapshot("./figs/head_LM_frontal.png", top = TRUE)
+writeASY(title = "head_LM_frontal", prc = FALSE)
 rgl::rgl.close()
 
 # Combine the two views
