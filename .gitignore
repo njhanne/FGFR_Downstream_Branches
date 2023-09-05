@@ -4,8 +4,8 @@
 .RData
 .Ruserdata
 .DS_Store
-data/.DS_Store
-data/Landmarks/.DS_Store
+Geometric_morphometrics/3D/data/.DS_Store
+Geometric_morphometrics/3D/data/Landmarks/.DS_Store
 	
 # Temporary
 data/Meshes/*.vtk

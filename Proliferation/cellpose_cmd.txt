@@ -1,0 +1,3 @@
+Use 'Branches' conda env for cellpose
+
+cellpose --dir C:\Users\njhan\Box\FGF_inhibitor_paper_5-26-2020\data\proliferation\new_images --use_gpu --pretrained_model C:\Users\njhan\Box\FGF_inhibitor_paper_5-26-2020\data\proliferation\cellpose_output\train\pHH3\models\pHH3_lab40x_redo10 --savedir C:\Users\njhan\Box\FGF_inhibitor_paper_5-26-2020\data\proliferation\cellpose_output\pHH3 --diameter 44 --chan 2 --chan2 0 --save_png --no_npy --verbose --look_one_level_down
