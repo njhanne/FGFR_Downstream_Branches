@@ -1,9 +1,8 @@
-# FGFR-Branches-GM
-Geometric morphometric analysis for the FGFR branches project
+# Downstream branches of FGFR signaling code
+Collection of python and R scripts used to analyze data and generate figures in the manuscript
 
+Each directory contains the code needed to analyze a different outcome measure. Each can be used independently from each other, they don't require one another except for the 'DirFileHelpers'.
 
-## Urgent jobs to do
+# Include info here on setting up conda for python...
 
-- [ ] NH needs to get files from Wei & Bilal, & place LMs
-
-- [ ] MVG fix morpho.tools.GM::fcsv2array() function
+# Include info here on setting up Slicer and cellpose
