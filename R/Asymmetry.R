@@ -6,6 +6,7 @@ library(devtools)
 library(morpho.tools.GM)
 # install_github("marta-vidalgarcia/symmetry")
 library(symmetry)
+# install_github("marta-vidalgarcia/mesh_process")
 library(mesh_process)
 library(Morpho)
 library(Rvcg)
@@ -37,6 +38,8 @@ library(abind)
 
 #### 2. LOAD DATA ####
 # Classifiers
+setwd("/Users/nhanne/PycharmProjects/FGFR-Branches-GM")
+
 classifiers_unord  <- read.csv("./data/classifiers.csv", header = TRUE)
 head(classifiers_unord)
 tail(classifiers_unord)
@@ -267,7 +270,7 @@ curveslide_all <- read.csv("./data/curveslide.csv")
 head_surface.lm <- c(34:51)
 
 # Atlases
-head_mesh <- geomorph::read.ply("./data/ATLAS_chick_ctr_23_smooth_ascii_no_back.ply") # Not sure what is wrong with this mesh
+head_mesh <- geomorph::read.ply("./data/ATLAS_chick_ctr_23_smooth_ascii_only_face.ply") # Not sure what is wrong with this mesh
 head_lowres <- vcgQEdecim(head_mesh, percent = 0.15)
 
 atlas_head_lm <- head_array[,, which(dimnames(head_array)[[3]] == "chick_ctr_23")]
@@ -295,6 +298,7 @@ rgl::text3d(x = atlas_head_lm[,1],
             z = atlas_head_lm[,3],
             texts = c(1:dim(atlas_head_lm)[1]),
             cex = 1.5, offset = 0.5, pos = 1)
+rgl::close3d()
 
 
 # 4.3. MIRRORING LANDMARKS ####
@@ -315,7 +319,7 @@ plot3d(half_array_side1, col = "blue", type = "s", aspect = "iso",
        size = 1, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
 plot3d(half_array_side1, col = "red", type = "s", aspect = "iso", 
        size = 1, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
-
+rgl::close3d()
 
 
 for (i in 1:dim(head_array)[3]){
@@ -326,6 +330,8 @@ for (i in 1:dim(head_array)[3]){
                                            MARGIN = 2, c(-1,1,1), `*`)
 }
 
+load("./data/RGL_head_pos.rdata")
+
 dorsal <- par3d()$userMatrix
 open3d(zoom = 0.75, windowRect = c(0, 0, 1000, 700), userMatrix = dorsal) 
 plot3d(GPA_geomorph$coords[, , 1], col = "black", type = "s", aspect = "iso", 
@@ -335,15 +341,17 @@ plot3d(array_side1_mirrored[,,1], col = "chartreuse", type = "s", aspect = "iso"
 
 which(classifiers_mirrored$treatment == "triple")
 
-open3d(zoom = 0.75, windowRect = c(0, 0, 1000, 700), userMatrix = dorsal) 
+open3d(zoom = 0.75, windowRect = c(0, 0, 1000, 700), userMatrix = frontal)
+rgl::shade3d(head_mesh, color = "gray", alpha =1,specular = "black", add=T)
 plot3d(GPA_geomorph$coords[, , 27], col = "black", type = "s", aspect = "iso", 
        size = 1, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
 plot3d(array_side1_mirrored[,,27], col = "chartreuse", type = "s", aspect = "iso", 
        size = 0.75, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
 
+
 # Change dimnames so we know which way they were mirrored
-dimnames(array_side1_mirrored)[[3]] <- paste0("contralateral_", dimnames(array_side1_mirrored)[[3]])
-dimnames(array_side2_mirrored)[[3]] <- paste0("treated_", dimnames(array_side2_mirrored)[[3]])
+dimnames(array_side1_mirrored)[[3]] <- paste0("contralateral_", dimnames(array_side1_mirrored)[[3]]) # this one has the contralateral side mirrored
+dimnames(array_side2_mirrored)[[3]] <- paste0("treated_", dimnames(array_side2_mirrored)[[3]]) # this one has treated side mirrored
 
 # And join both arrays
 
@@ -561,7 +569,7 @@ load("./data/RGL_head_pos.rdata")
 head_mesh <- geomorph::read.ply("./data/ATLAS_chick_ctr_23_smooth_ascii_only_face.ply") 
 # The mesh should only be surface, and be just have the frontal side here
 head_lowres <- vcgQEdecim(head_mesh, percent = 0.15)
-atlas_head_lm <- head_array[,, which(dimnames(head_array)[[3]] == "chick_ctr_23")]
+
 
 levels(gdf_mirrored$treatment_mirror)
 
@@ -576,9 +584,10 @@ treat_DMSO_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatme
 contra_triple_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "contra_triple")])
 treat_triple_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "treat_triple")])
 
-
-
+atlas_head_lm <- mirrored_array[,, which(dimnames(mirrored_array)[[3]] == "contralateral_chick_ctr_23")] # used for figure
+model_head_lm <- GPA_mirrored_contra$coords[,, which(dimnames(GPA_mirrored_contra$coords)[[3]] == "contralateral_chick_ctr_23")] # used for warping mesh
 # Create morphed meshes
+model_DMSO_mesh <- tps3d(head_lowres, as.matrix(atlas_head_lm), model_head_lm, threads = 1)
 contra_DMSO_mesh <- tps3d(head_lowres, as.matrix(atlas_head_lm), contra_DMSO_mean_shape, threads = 1)
 treat_DMSO_mesh <- tps3d(head_lowres, as.matrix(atlas_head_lm), treat_DMSO_mean_shape, threads = 1)
 contra_triple_mesh <- tps3d(head_lowres, as.matrix(atlas_head_lm), contra_triple_mean_shape, threads = 1)
@@ -586,6 +595,15 @@ treat_triple_mesh <- tps3d(head_lowres, as.matrix(atlas_head_lm), treat_triple_m
 
 
 # Plot morphs
+open3d(zoom=0.75, windowRect = c(0,0, 1000, 700), userMatrix = frontal)
+rgl::shade3d(model_DMSO_mesh, color="gray", alpha=1, specular="black")
+rgl::plot3d(as.matrix(atlas_head_lm), col = "black", type = "s", aspect = "iso", size = 1, add = TRUE)
+box3d(tick=T)
+
+rgl.snapshot("./figs/Morph_contralateral_DMSO_frontal_head.png", top = TRUE)
+writePLY("./output/contralateral_DMSO_mesh.ply")
+rgl.close()
+
 open3d(zoom=0.75, windowRect = c(0,0, 1000, 700), userMatrix = frontal)
 rgl.pop("lights")
 light3d(specular="black")
@@ -796,6 +814,7 @@ plot(face_integration_CTRL) # PLS plot
 plot(face_integration_TREATMENT)
 
 PLS_comparison <- compare.pls(CTRL = face_integration_CTRL, TRIPLE = face_integration_TREATMENT)
+summary(PLS_comparison)
 
 # Delete file if it exists
 if (file.exists("./output/Integration_face_comparisons_CTRL_TRIPLE_May2023.txt")) {

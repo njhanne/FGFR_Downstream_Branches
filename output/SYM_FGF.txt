@@ -19,3 +19,23 @@ ind:side  53 0.22631 0.004270 0.29534
 Total    107 0.76628                                         
 ---
 Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+SYM_FGF
+
+Call:
+bilat.symmetry(A = head_array, ind = dimnames(head_array)[[3]],      side = NULL, replicate = NULL, object.sym = TRUE, land.pairs = pairedLM,      iter = 999, seed = NULL, RRPP = TRUE) 
+
+
+Symmetry (data) type: Object 
+
+Type I (Sequential) Sums of Squares and Cross-products
+Randomized Residual Permutation Procedure Used
+1000 Permutations
+
+Shape ANOVA
+          Df      SS       MS     Rsq      F      Z Pr(>F)   
+ind       53 0.45940 0.008668 0.59952  2.030 6.8393  0.001 **
+side       1 0.08057 0.080567 0.10514 18.868 3.4383  0.001 **
+ind:side  53 0.22631 0.004270 0.29534                        
+Total    107 0.76628                                         
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
