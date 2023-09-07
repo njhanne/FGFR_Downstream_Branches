@@ -57,10 +57,10 @@ for image_pair_name in image_info['sample_side'].unique():
 
     if idx == 0:
       stack = np.empty([image.shape[0], image.shape[1], stack_size]) # create the stack (empty array)
-    if bool(re.search('\d{1,}a.tif', image_name)): # look for the image ending in 'a', this is the nuclei image
-      stack[:,:,0] = manipulate_image(image, info) # add it as first image in stack
+    if bool(re.search('\d{1,}a.tif', image_name)): # look for the image ending in 'a', this is the pHH3 image
+      stack[:,:,1] = manipulate_image(image, info) # add it as second image in stack
     else:
-      stack[:,:,1] = manipulate_image(image, info) # add phh3 image as second image in stack
+      stack[:,:,0] = manipulate_image(image, info) # add nuclei image as first image in stack
 
   # find image magnification from old filename
   magnification = re.search('\d{1,}x', manual_info['old_filename'].iloc[0]) # gets magnification
