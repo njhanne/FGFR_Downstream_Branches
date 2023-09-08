@@ -6,7 +6,7 @@ Each directory contains the code needed to analyze a different outcome measure. 
 # Getting python installed and ready
 1. Much of the code runs in python. I recommend using conda for managing the environment and installing needed packages. It can be downloaded [here](https://www.anaconda.com/download). When installing if it asks about 'adding python to path' make sure to select 'no'.
 
-   Fire up anaconda and create an environment by typing:
+   If you are on Windows, open up anaconda from the start menu. If Macintosh or Linux then just open a terminal. Create an environment by typing:
    ```
    conda create -n Branches python=3.8
    ```
