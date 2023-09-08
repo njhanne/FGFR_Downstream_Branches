@@ -18,6 +18,7 @@ Each directory contains the code needed to analyze a different outcome measure. 
    ```
    conda install packagename1 packagename2 etc
    ```
+
 2. Before installing any other dependencies I recommend installing Cellpose. Conda tends to get stuck if you don't install this first. Detailed explanation of how to install Cellpose for different users is beyond the scope of this little readme, but I would recommend visiting their [page here](https://github.com/MouseLand/cellpose) and follow the directions to install it locally using conda.
    - Using pip to install packages doesn't always play nice with conda, so I first install their listed dependencies using conda, then install the gui version using pip as they describe.
    - If your computer has an Nvidia gpu then I highly recommend installing cuda as it will make cellpose run significantly faster.
@@ -44,9 +45,10 @@ Each directory contains the code needed to analyze a different outcome measure. 
        cellpose
        ```
        Check the terminal to see a message about whether your (optional first step) cuda install was detected "TORCH CUDA version installed and working." should be there if you got it setup right!
+
 3. With the hard part out of the way you can install the rest of the dependencies:
    ```
-   conda install 
+   conda install pandas matplotlib
    ```
 
 
