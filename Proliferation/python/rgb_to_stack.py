@@ -31,7 +31,7 @@ def manipulate_image(image, info):
 # start by getting all the raw images
 data_dir = (Path.cwd().parent.parent / 'data' / 'proliferation').resolve()
 input_directory = (data_dir / 'raw_images').resolve()
-output_directory = (data_dir / 'new_images2').resolve()
+output_directory = (data_dir / 'new_images').resolve()
 image_dirs, image_paths = find_all_filepaths(input_directory, '.tif')
 
 

@@ -1,3 +1,12 @@
 Use 'Branches' conda env for cellpose
+If the python code isn't working or you want to try some things out for yourself, you can run cellpose from the terminal
+or anaconda terminal, but building the commands can be tedious and system specific which is why I wrote the python script...
 
-cellpose --dir C:\Users\njhan\Box\FGF_inhibitor_paper_5-26-2020\data\proliferation\new_images --use_gpu --pretrained_model C:\Users\njhan\Box\FGF_inhibitor_paper_5-26-2020\data\proliferation\cellpose_output\train\pHH3\models\pHH3_lab40x_redo10 --savedir C:\Users\njhan\Box\FGF_inhibitor_paper_5-26-2020\data\proliferation\cellpose_output\pHH3 --diameter 44 --chan 2 --chan2 0 --save_png --no_npy --verbose --look_one_level_down
+If you want to build it, the format is like this - here using the example of nuclei images
+
+if you have Nvidia gpu and installed cuda:
+cellpose --dir path_to_directory_of_images_to_analyze --use_gpu --pretrained_model path_to_nuclei_model --savedir path_to_output_directory --diameter 44 --chan 1 --chan2 0 --save_png --no_npy --verbose --look_one_level_down
+
+if not:
+cellpose --dir path_to_directory_of_images_to_analyze --pretrained_model path_to_nuclei_model --savedir path_to_output_directory --diameter 44 --chan 1 --chan2 0 --save_png --no_npy --verbose --look_one_level_down
+
