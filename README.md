@@ -48,7 +48,7 @@ Each directory contains the code needed to analyze a different outcome measure. 
 
 3. With the hard part out of the way you can install the rest of the dependencies:
    ```
-   conda install pandas matplotlib
+   conda install pandas matplotlib scikit-image
    ```
 
 
