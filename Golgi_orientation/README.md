@@ -13,6 +13,16 @@ I think most of the columns are self-explanatory except:
    - max_distance: this tells the matching algorithm the cutoff distance between a nucleus and its Golgi body.
    - smallest_nuc: this tells the matching algorithm the cutoff for the smallest volume of a nucleus to consider.
    - angle_adjustment: this is an angle that will be subtracted from each Golgi angle measurement. The angle is the angle 
-   of a line drawn between the left and right globular processes on a low magnification 'overview' image of the tissue section.
+   of a line drawn between the left and right globular processes on a low resolution 'overview' image of the tissue section.
    See the example image below:
    ![Example of angle adjustment drawn on an overview image](/Golgi_orientation/angle_example.png)
+3. Cellpose models are included for detecting nuclei and GM130. Both models were trained on images of Hoechst and GM130 
+stained tissue sections from the chicken FNP. Every other image in the z-direction was labelled in ImageJ by hand. These 
+labelled images were used to train with the Cellpose 'nuclei' model as the base. The models were refined further by 
+'human-in-the-loop' training and correcting on unlabelled images. Using this method we only had to hand-correct ~5-10 images
+before it was very good.
+
+## Actually starting the analysis
+1. Run the 'run_cellpose_Golgi.py'. Don't forget to put 'False' instead of 'True' if you didn't install the cuda version of pytorch.
+The images are quite large so the script will run for a pretty long time. Without CUDA it's going to take a very long time.
+2. 
