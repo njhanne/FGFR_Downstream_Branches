@@ -1,7 +1,8 @@
 ### Load libraries for packages
 # circle stats stuff
-library(circular)
 # library(bpnreg)
+library(circular)
+
 
 # df assistance
 library(plyr)
@@ -25,24 +26,14 @@ library(svglite)
 library(magick)
 
 
-### Directory
-setwd("C:\\Users\\njhan\\Box\\FGF_inhibitor_paper_5-26-2020\\data\\GM130") # home
-setwd("C:\\Users\\nhanne\\Box\\FGF_inhibitor_paper_5-26-2020\\data\\GM130") # work
-setwd("/Users/nhanne/Library/CloudStorage/Box-Box/FGF_inhibitor_paper_5-26-2020/data/GM130") # laptop
-getwd() #check our working directory
-
-
-### Prepare the cellpose assisted matching angles
-# if you've run it before then just load the combined data here
-df <- readRDS("combined_angles.Rda")
-
-# else you generate them again here
-  filenames <- dir(".", "*._angle_results.csv") # get all output csv from python
+### Helper functions for making the dataframe and correcting angle data
+compile_angle_df <- function() {
+  filenames <- dir("./cellpose/angle_results/", "*._angle_results.csv") # get all output csv from python
   types <- sub('(\\A*)_angle_results.*', '\\1', filenames) # get the sample names
   # combine all the individual csv into one big dataframe
   # this can be quite slow as there are tons of data
   df<- adply(data.frame(f=I(filenames), t=types), 1,
-                with, cbind(read.csv(f), sample_info=t))
+             with, cbind(read.csv(file.path('./cellpose/angle_results', f)), sample_info=t))
   # splits up the filename into relevant sample info and puts them in their own little columns
   split_text <- str_split(df$sample_info, '_')
   df <- df %>% mutate(treatment = sapply(split_text, function(l) l[[1]]))
@@ -53,92 +44,122 @@ df <- readRDS("combined_angles.Rda")
   df <- df %>% mutate(side_num = case_when(side == "control" ~ 0,
                                            TRUE ~ 1))
   df <- df %>% mutate(sample_info = tolower(sample_info))
-
+  
   df$id_old <- df$id
   df <- df %>% unite(id, c('treatment','id_old'), remove=FALSE)
   df$id <- as.factor(df$id)
   df$id <- as.numeric(df$id)
-
+  
   df <- df %>% select(!X)  # deletes unneeded column
+  return(df)
+} 
 
-  # save the combined dataset for faster loading next time
-  saveRDS(df, file='combined_angles.Rda')
+
+adjust_base_angles <- function(df, info_file){
+  angle_adjustment_df <- info_file %>% filter(!is.na(angle_adjustment)) %>% select(new_filename, angle_adjustment) %>% distinct()
+  angle_adjustment_df <- angle_adjustment_df %>% mutate(angle_adjustment = (angle_adjustment * pi)/180) # convert to radians
+  df <- left_join(df, angle_adjustment_df, by=c('t' = 'new_filename')) # put the adjustment into our main df
+  df$angle_adjustment[is.na(df$angle_adjustment)] <- 0 # change na's to zero
+  df$angle_old <- df$angle # just in case we save the og angles
+  df <- df %>% mutate(angle = angle - angle_adjustment) # 'add' the new angle adjustment
+  df <- df %>% mutate(angle = case_when(angle > 2*pi ~ angle - 2*pi,
+                                        angle < 0 ~ angle + 2*pi,
+                                        TRUE ~ angle))
+  return(df)
+}
 
 
-### Correct angles on any images that are not 'square'
-# rotates all angles in a given image by a set angle
-# in this data we have a horizontal angle pointing towards the right side of the image is 0 degrees
-# CCW rotation is positive (Right hand rule)
-# need to draw a line in in imagej from the left to right along the 'flat' of the FNP, then click 'measure' (ctrl+m) and get the angle
-# just add this angle to all other angles (actually subtract it...)
-# the angle is in the 'GM130_image_log.csv' but was added after most of the python analysis so isn't in the df
-# re-running the python analysis should get it included but that will take forever so this here's a workaround
-info_df <- read.csv('GM130_image_log.csv')
-angle_adjustment_df <- info_df %>% filter(!is.na(angle_adjustment)) %>% select(new_filename, angle_adjustment) %>% distinct()
-angle_adjustment_df <- angle_adjustment_df %>% mutate(angle_adjustment = (angle_adjustment * pi)/180) # convert to radians
-df <- left_join(df, angle_adjustment_df, by=c('t' = 'new_filename')) # put the adjustment into our main df
-df$angle_adjustment[is.na(df$angle_adjustment)] <- 0 # change na's to zero
-df$angle_old <- df$angle # just in case we save the og angles
-df <- df %>% mutate(angle = angle - angle_adjustment) # 'add' the new angle adjustment
-df <- df %>% mutate(angle = case_when(angle > 2*pi ~ angle - 2*pi,
-                                      angle < 0 ~ angle + 2*pi,
-                                      TRUE ~ angle))
-
-### filter pairs based on imagej rois ###
-# this helps get rid of angles in the ectoderm or other problem areas
-# need to use the 'simple features' sf library to turn imagej roi points into lines, and then those lines into polygons
-# sf can then see which centroids are within the polygon
-
-# if you've run it before then just load the combined data here
-df_masked <- readRDS("combined_angles_masked.Rda")
-
-# if not then rerun all this
-  mask_out_centroids <- function(filtered_df, imagej_mask, type_column) {
-    centroids <- filtered_df %>% select(nuclei_centroidx, nuclei_centroidy)
-    mask_linestring <- st_linestring(imagej_mask$coords, dim='XY')
-    mask_polygon <- st_cast(mask_linestring, 'POLYGON')
-    keep <- st_intersection(st_multipoint(data.matrix(centroids), dim='XY'), mask_polygon)
-
-    p <- ggplot() + geom_sf(data = mask_polygon) +
-      geom_point(data = centroids, aes(nuclei_centroidx, nuclei_centroidy), color = 'red') + geom_sf(data=keep)
-    file_name <- paste(type_column, "_masked_nuclei.svg")
-    ggsave(filename=file_name, p)
-
-    keep <- as.data.frame(as.matrix(keep))
-    filtered_df <- inner_join(filtered_df, keep, by=c('nuclei_centroidx' = 'V1', 'nuclei_centroidy' = 'V2'))
-    return(filtered_df)
-  }
-
-  mask_filenames <- list.files(path="./new_images", pattern=".roi$", recursive=TRUE)
-  df_masked <- data.frame()
-  for (i in 1:length(mask_filenames)) {
-    # reading in the imagej roi creates a matrix of xy coordinates which can be plugged into sf
-    mask <- read.ijroi(file.path("./new_images", mask_filenames[i]), verbose = FALSE)
-    type_col <- sub('(\\A*).roi$', '\\1', basename(mask_filenames[i])) # get column name for matching
-    filtered_df <- mask_out_centroids(df %>% filter(t == type_col), mask, type_col)
-    df_masked <- rbind(df_masked, filtered_df) # probably not supposed to do this in a loop but it works
-  }
-  df_masked <- rbind(df_masked, df %>% filter(df$t %in% setdiff(unique(df$t), unique(df_masked$t))))
-  # save the combined dataset for faster loading next time
-  saveRDS(df_masked, file='combined_angles_masked.Rda')
-
-### filter based on distance from the 'baseline' roi line
-filter_distance_centroids <- function(filtered_df, baseline_roi, type_column, thresh_dist) {
+apply_mask <- function(filtered_df, imagej_mask, type_column) {
   centroids <- filtered_df %>% select(nuclei_centroidx, nuclei_centroidy)
-  baseline_linestring <- st_linestring(baseline_roi$coords, dim='XY')
-  keep <- st_intersection(st_multipoint(data.matrix(centroids), dim='XY'), st_buffer(baseline_linestring, thresh_dist/0.2840910))
-
-  # p <- ggplot() + geom_sf(data = baseline_linestring) +
-  #   geom_point(data = centroids, aes(nuclei_centroidx, nuclei_centroidy), color = 'red') + geom_sf(data=keep)
-  # file_name <- paste(type_column, "_masked_baseline_nuclei.svg")
-  # ggsave(filename=file_name, p)
-
+  mask_linestring <- st_linestring(imagej_mask$coords, dim='XY')
+  mask_polygon <- st_cast(mask_linestring, 'POLYGON')
+  keep <- st_intersection(st_multipoint(data.matrix(centroids), dim='XY'), mask_polygon)
+  
+  p <- ggplot() + geom_sf(data = mask_polygon) +
+    geom_point(data = centroids, aes(nuclei_centroidx, nuclei_centroidy), color = 'red') + geom_sf(data=keep)
+  file_name <- paste(type_column, "_masked_nuclei.svg")
+  ggsave(filename= file.path('./analysis_output/mask_images', file_name), p)
+  
   keep <- as.data.frame(as.matrix(keep))
   filtered_df <- inner_join(filtered_df, keep, by=c('nuclei_centroidx' = 'V1', 'nuclei_centroidy' = 'V2'))
   return(filtered_df)
 }
 
-baseline_mask_filenames <- list.files(path="./sf_rois", pattern=".roi$")
+mask_out_centroids <- function(df, mask_filenames) {
+  df_masked <- data.frame()
+  for (i in 1:length(mask_filenames)) {
+    # reading in the imagej roi creates a matrix of xy coordinates which can be plugged into sf
+    mask <- read.ijroi(file.path("./imagej_rois/region_mask_rois/", mask_filenames[i]), verbose = FALSE)
+    type_col <- sub('(\\A*).roi$', '\\1', basename(mask_filenames[i])) # get column name for matching
+    temp_df <- df %>% filter(t == type_col)
+    if (nrow(temp_df) == 0) {
+      print(paste0('Skipping ', type_col))
+      filtered_df <- temp_df
+      df_masked <- rbind(df_masked, filtered_df)
+    } else {
+      filtered_df <- apply_mask(temp_df, mask, type_col)
+      df_masked <- rbind(df_masked, filtered_df) # probably not supposed to do this in a loop but it works
+    }
+  }
+  df_masked <- rbind(df_masked, df %>% filter(df$t %in% setdiff(unique(df$t), unique(df_masked$t))))
+  return(df_masked)
+}
+
+
+filter_distance_centroids <- function(filtered_df, baseline_roi, type_column, thresh_dist) {
+  centroids <- filtered_df %>% select(nuclei_centroidx, nuclei_centroidy)
+  baseline_linestring <- st_linestring(baseline_roi$coords, dim='XY')
+  keep <- st_intersection(st_multipoint(data.matrix(centroids), dim='XY'), st_buffer(baseline_linestring, thresh_dist/0.2840910))
+  keep <- as.data.frame(as.matrix(keep))
+  filtered_df <- inner_join(filtered_df, keep, by=c('nuclei_centroidx' = 'V1', 'nuclei_centroidy' = 'V2'))
+  return(filtered_df)
+}
+
+### Directory
+# R doesn't have a good way to get the path of where this file is located, unfortunately
+# if you are running this code in Rstudio, try this:
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+getwd() #check our working directory
+setwd("../../data/GM130")
+# if you aren't using rstudio, use the command setwd() 
+# and point it to the data/GM130 directory
+
+
+### Prepare the cellpose assisted matching angles
+# if you've run it before then just load the combined data here
+df <- readRDS("combined_angles.Rda")
+
+# else you generate them again here and then
+# save the combined dataset for faster loading next time
+df <- compile_angle_df()
+saveRDS(df, file='combined_angles.Rda') 
+
+### Correct angles on any images that are not 'square'
+# rotates all angles in a given image by a set angle
+# in this data we have a horizontal angle pointing right as 0 degrees
+# CCW rotation is positive (right hand rule)
+# I draw a line in in imagej from the left to right along the 'flat' of the FNP, 
+# then click 'measure' (ctrl+m) and get the angle
+# just subtract this angle to all other angles
+# see the example image in the github readme
+info_df <- read.csv('GM130_image_log.csv')
+df <- adjust_base_angles(df, info_df)
+
+### filter pairs based on imagej rois ###
+# this gets rid of angles in the ectoderm or other problem areas like neurectoderm
+# I manually drew polygon regions of interest in ImageJ around the mesenchyme, 
+# excluding ectoderm and neurectoderm.
+# see example image in the github readme
+# This code loads in these .roi files and converts them to usable polygons for filtering.
+# The read.ijroi unfortunately imports the 'polygon' as a series of points instead of lines,
+# so we need to use the 'simple features' sf library to convert roi points into lines, 
+# and then those lines into polygons. sf can then see which centroids are within the polygon
+mask_filenames <- list.files(path="./imagej_rois/region_mask_rois/", pattern=".roi$", recursive=TRUE)
+df_masked <- mask_out_centroids(df, mask_filenames)
+
+
+### filter based on distance from the 'baseline' roi line
+baseline_mask_filenames <- list.files(path="./imagej_rois/baseline_rois/", pattern=".roi$")
 df_baseline_masked <- data.frame()
 for (i in 1:length(baseline_mask_filenames)) {
   # reading in the imagej roi creates a matrix of xy coordinates which can be plugged into sf
