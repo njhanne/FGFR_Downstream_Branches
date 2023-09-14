@@ -1,8 +1,12 @@
-### Load libraries for packages
-# circle stats stuff
-# library(bpnreg)
-library(circular)
+#### 0.0 Load libraries for packages ####
+# Uncomment and run this the first time to make sure everything gets installed
+# install.packages(c('circular', 'plyr', 'dplyr', 'tidyr', 'stringr', 'RImageJROI', 'sf', 'terra', 'ggplot2', 'RColorBrewer', 'svglite', 'magick'))
+# if terra takes more than 60s to download it will fail
+# run this line: options(timeout = max(1000, getOption("timeout")))
 
+# circle stats stuff
+# library(bpnreg) # not using this as it can't handle size of our data :(
+library(circular)
 
 # df assistance
 library(plyr)
@@ -16,8 +20,6 @@ library(sf)
 
 # needed for 'globe' plots
 library(terra)
-# if this one takes more than 60s to download it will fail
-# run this line: options(timeout = max(1000, getOption("timeout")))
 
 # graphing
 library(ggplot2)
@@ -26,7 +28,8 @@ library(svglite)
 library(magick)
 
 
-### Helper functions for making the dataframe and correcting angle data
+#### 0.1 Helper functions ####
+#for making the dataframe and correcting angle data
 compile_angle_df <- function() {
   filenames <- dir("./cellpose/angle_results/", "*._angle_results.csv") # get all output csv from python
   types <- sub('(\\A*)_angle_results.*', '\\1', filenames) # get the sample names
@@ -69,23 +72,25 @@ adjust_base_angles <- function(df, info_file){
 }
 
 
-apply_mask <- function(filtered_df, imagej_mask, type_column) {
+apply_mask <- function(filtered_df, imagej_mask, type_column, save_img) {
   centroids <- filtered_df %>% select(nuclei_centroidx, nuclei_centroidy)
   mask_linestring <- st_linestring(imagej_mask$coords, dim='XY')
   mask_polygon <- st_cast(mask_linestring, 'POLYGON')
   keep <- st_intersection(st_multipoint(data.matrix(centroids), dim='XY'), mask_polygon)
   
-  p <- ggplot() + geom_sf(data = mask_polygon) +
-    geom_point(data = centroids, aes(nuclei_centroidx, nuclei_centroidy), color = 'red') + geom_sf(data=keep)
-  file_name <- paste(type_column, "_masked_nuclei.svg")
-  ggsave(filename= file.path('./analysis_output/mask_images', file_name), p)
-  
+  if (save_img) {
+    p <- ggplot() + geom_sf(data = mask_polygon) +
+      geom_point(data = centroids, aes(nuclei_centroidx, nuclei_centroidy), color = 'red') + geom_sf(data=keep)
+    file_name <- paste(type_column, "_masked_nuclei.svg")
+    ggsave(filename= file.path('./analysis_output/mask_images', file_name), p)
+  }
+
   keep <- as.data.frame(as.matrix(keep))
   filtered_df <- inner_join(filtered_df, keep, by=c('nuclei_centroidx' = 'V1', 'nuclei_centroidy' = 'V2'))
   return(filtered_df)
 }
 
-mask_out_centroids <- function(df, mask_filenames) {
+mask_out_centroids <- function(df, mask_filenames, save_img=TRUE) {
   df_masked <- data.frame()
   for (i in 1:length(mask_filenames)) {
     # reading in the imagej roi creates a matrix of xy coordinates which can be plugged into sf
@@ -93,12 +98,14 @@ mask_out_centroids <- function(df, mask_filenames) {
     type_col <- sub('(\\A*).roi$', '\\1', basename(mask_filenames[i])) # get column name for matching
     temp_df <- df %>% filter(t == type_col)
     if (nrow(temp_df) == 0) {
+      # if the python output data isn't there then don't analyze it...
       print(paste0('Skipping ', type_col))
       filtered_df <- temp_df
       df_masked <- rbind(df_masked, filtered_df)
     } else {
+      # apply the mask to exclude nuclei outside of it
       filtered_df <- apply_mask(temp_df, mask, type_col)
-      df_masked <- rbind(df_masked, filtered_df) # probably not supposed to do this in a loop but it works
+      df_masked <- rbind(df_masked, filtered_df, save_img) # probably not supposed to do this in a loop but it works
     }
   }
   df_masked <- rbind(df_masked, df %>% filter(df$t %in% setdiff(unique(df$t), unique(df_masked$t))))
@@ -106,7 +113,7 @@ mask_out_centroids <- function(df, mask_filenames) {
 }
 
 
-filter_distance_centroids <- function(filtered_df, baseline_roi, type_column, thresh_dist) {
+apply_distance_filter <- function(filtered_df, baseline_roi, type_column, thresh_dist) {
   centroids <- filtered_df %>% select(nuclei_centroidx, nuclei_centroidy)
   baseline_linestring <- st_linestring(baseline_roi$coords, dim='XY')
   keep <- st_intersection(st_multipoint(data.matrix(centroids), dim='XY'), st_buffer(baseline_linestring, thresh_dist/0.2840910))
@@ -115,7 +122,84 @@ filter_distance_centroids <- function(filtered_df, baseline_roi, type_column, th
   return(filtered_df)
 }
 
-### Directory
+
+filter_baseline_distance <- function(baseline_mask_filenames, df, distance=200) {
+  df_masked <- data.frame()
+  for (i in 1:length(baseline_mask_filenames)) {
+    # reading in the imagej roi creates a matrix of xy coordinates which can be plugged into sf
+    baseline_roi <- read.ijroi(file.path("./imagej_rois/baseline_rois", baseline_mask_filenames[i]), verbose = FALSE)
+    type_col <- sub('(\\A*)_baseline.roi$', '\\1', basename(baseline_mask_filenames[i])) # get column name for matching
+    temp_df <- df %>% filter(t == type_col)
+    if (nrow(temp_df) == 0) {
+      # if the python output data isn't there then don't analyze it...
+      print(paste0('Skipping ', type_col))
+      filtered_df <- temp_df
+      df_masked <- rbind(df_masked, filtered_df)
+    } else {
+      # apply the mask to exclude nuclei outside of it
+      filtered_df <- apply_distance_filter(temp_df, baseline_roi, type_col, distance)
+      df_masked <- rbind(df_masked, filtered_df) # probably not supposed to do this in a loop but it works
+    }
+  }
+  df_masked <- rbind(df_masked, df %>% filter(df$t %in% setdiff(unique(df$t), unique(df_masked$t))))
+  return(df_masked)
+}
+
+
+flip_y_angles <- function(df_to_flip) {
+  df_flipped_control <- df_to_flip %>% filter((treatment == 'LY' & side_num == 1) |  (treatment != 'LY' & side_num == 0))
+  df_flipped_control <- df_flipped_control %>% mutate(angle = case_when(angle <= pi ~ pi-angle, angle > pi ~ 3*pi - angle))
+  if ('angle_old' %in% names(df_flipped_control)) {
+    df_flipped_control <- df_flipped_control %>% mutate(angle_old = case_when(angle_old <= pi ~ pi-angle_old, angle_old > pi ~ 3*pi - angle_old))
+  }
+  
+  df_original_control <- df_to_flip %>% filter((treatment != 'LY' & side_num == 1) |  (treatment == 'LY' & side_num == 0))
+  df_flipped_control <- rbind(df_flipped_control, df_original_control)
+  return(df_flipped_control)
+}
+
+
+#### Cellularity Helpers ####
+mask_inter_area <- function(area_mask, baseline_roi, thresh_dist, res) {
+  baseline_linestring <- st_linestring(baseline_roi$coords, dim='XY')
+  baseline_buffer <- st_buffer(baseline_linestring, thresh_dist/res)
+  
+  mask_linestring <- st_linestring(area_mask$coords, dim='XY')
+  mask_polygon <- st_cast(mask_linestring, 'POLYGON')
+  if (st_is_valid(mask_polygon))  {
+    area <- st_area(st_intersection(mask_polygon, baseline_buffer)) * (res^2)
+  } else {
+    area <- st_area(st_intersection(st_buffer(mask_polygon, 0), baseline_buffer)) * (res^2)
+  }
+  return(area)
+}
+
+
+get_cellularity <- function(df, matches, mask_filenames, baseline_mask_filenames, distance=200, res=0.2840910) {
+  cellularity <- data.frame()
+  for (i in 1:nrow(matches)) {
+    # reading in the imagej roi creates a matrix of xy coordinates which can be plugged into sf
+    j <- matches[i,2]
+    area_mask <- read.ijroi(file.path("./imagej_rois/region_mask_rois", mask_filenames[j]), verbose = FALSE)
+    type_col <- sub('(\\A*).roi$', '\\1', basename(mask_filenames[j])) # get column name for matching
+    # cellularity <- mask_cellularity(df %>% filter(t == type_col), mask_area, type_col)
+    
+    baseline_roi <- read.ijroi(file.path("./imagej_rois/baseline_rois", baseline_mask_filenames[i]), verbose = FALSE)
+    # type_col <- sub('(\\A*)_baseline.roi$', '\\1', basename(baseline_mask_filenames[i])) # get column name for matching
+    area <- mask_inter_area(area_mask, baseline_roi, distance, res)
+    cells <- nrow(df %>% filter(t == type_col))
+    if (cells != 0) {
+      cellularity <- rbind(cellularity, c(type_col, area, cells, cells/area)) # probably not supposed to do this in a loop but it works
+    }
+  }
+  colnames(cellularity) <- c('t', 'area', 'cells', 'cells_per_sqmicron')
+  df <- full_join(df, cellularity)
+  return(df)
+}
+
+
+#### 1 Main ####
+#### 1.1 Setting up the DF ####
 # R doesn't have a good way to get the path of where this file is located, unfortunately
 # if you are running this code in Rstudio, try this:
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
@@ -126,13 +210,14 @@ setwd("../../data/GM130")
 
 
 ### Prepare the cellpose assisted matching angles
+# This step can take a long time! More than a minute
 # if you've run it before then just load the combined data here
 df <- readRDS("combined_angles.Rda")
-
 # else you generate them again here and then
 # save the combined dataset for faster loading next time
 df <- compile_angle_df()
 saveRDS(df, file='combined_angles.Rda') 
+
 
 ### Correct angles on any images that are not 'square'
 # rotates all angles in a given image by a set angle
@@ -145,6 +230,13 @@ saveRDS(df, file='combined_angles.Rda')
 info_df <- read.csv('GM130_image_log.csv')
 df <- adjust_base_angles(df, info_df)
 
+
+### Flip all the control angles across the 'y' axis so they match w/ treatment side
+# NOTE: For some reason the LY group ones are reversed? Probably how the section was put on the slide...
+# this is very important part of the analysis
+df <- flip_y_angles(df)
+
+
 ### filter pairs based on imagej rois ###
 # this gets rid of angles in the ectoderm or other problem areas like neurectoderm
 # I manually drew polygon regions of interest in ImageJ around the mesenchyme, 
@@ -155,89 +247,31 @@ df <- adjust_base_angles(df, info_df)
 # so we need to use the 'simple features' sf library to convert roi points into lines, 
 # and then those lines into polygons. sf can then see which centroids are within the polygon
 mask_filenames <- list.files(path="./imagej_rois/region_mask_rois/", pattern=".roi$", recursive=TRUE)
-df_masked <- mask_out_centroids(df, mask_filenames)
+df_masked <- mask_out_centroids(df, mask_filenames, FALSE)
 
 
 ### filter based on distance from the 'baseline' roi line
+# this is very similar to the last chuck of code above
+# Here I made line roi's in ImageJ along the top of the nasalpit, globular process, and lateral FNP
+# I'll put another example in the github readme
+# We will only look at nuclei-Golgi pairs that are within 200 um of this line
+# Basically we don't want to analyze pairs that are more in the mid-FNP or too 
+# close to the neural ectoderm
 baseline_mask_filenames <- list.files(path="./imagej_rois/baseline_rois/", pattern=".roi$")
-df_baseline_masked <- data.frame()
-for (i in 1:length(baseline_mask_filenames)) {
-  # reading in the imagej roi creates a matrix of xy coordinates which can be plugged into sf
-  baseline_roi <- read.ijroi(file.path("./sf_rois", baseline_mask_filenames[i]), verbose = FALSE)
-  type_col <- sub('(\\A*)_baseline.roi$', '\\1', basename(baseline_mask_filenames[i])) # get column name for matching
-  filtered_df <- filter_distance_centroids(df_masked %>% filter(t == type_col), baseline_roi, type_col, 200)
-  df_baseline_masked <- rbind(df_baseline_masked, filtered_df) # probably not supposed to do this in a loop but it works
-}
-df_baseline_masked <- rbind(df_baseline_masked, df_masked %>% filter(df_masked$t %in% setdiff(unique(df_masked$t), unique(df_baseline_masked$t))))
+df_baseline_masked <- filter_baseline_distance(baseline_mask_filenames, df_masked, 200)
 
 
-### little aside to calculate cells per area in the masks above
-mask_inter_area <- function(area_area, baseline_roi, thresh_dist) {
-  res <- 0.2840910
-  baseline_linestring <- st_linestring(baseline_roi$coords, dim='XY')
-  baseline_buffer <- st_buffer(baseline_linestring, thresh_dist/res)
-
-  mask_linestring <- st_linestring(area_mask$coords, dim='XY')
-  mask_polygon <- st_cast(mask_linestring, 'POLYGON')
-  if (st_is_valid(mask_polygon))  {
-    area <- st_area(st_intersection(mask_polygon, baseline_buffer)) * (res^2)
-  } else {
-    area <- st_area(st_intersection(st_buffer(mask_polygon, 0), baseline_buffer)) * (res^2)
-  }
-
-  # p <- ggplot() + geom_sf(data = mask_polygon) +
-  #   geom_sf(data = baseline_buffer, color='red') +
-  #   geom_sf(data = st_intersection(mask_polygon, baseline_buffer), color='purple') #+
-  # plot(p)
-
-  return(area)
-}
-
-mask_filenames <- list.files(path="./new_images", pattern=".roi$", recursive=TRUE)
-baseline_mask_filenames <- list.files(path="./sf_rois", pattern=".roi$")
-
-# match the two different imagej roi things
+### Calculate cells per area in the masks above
+# This will match the file names of the two different ImageJ roi files we used
+# we will use this to calculate area
 matches <- data.frame()
 for (i in 1:length(baseline_mask_filenames)) {
   match <- str_which(mask_filenames, str_replace(baseline_mask_filenames[i], '_baseline.roi', '.roi'))
   matches <- rbind(matches, c(i, match))
 }
-cellularity <- data.frame()
-for (i in 1:nrow(matches)) {
-  # reading in the imagej roi creates a matrix of xy coordinates which can be plugged into sf
-  j <- matches[i,2]
-  area_mask <- read.ijroi(file.path("./new_images", mask_filenames[j]), verbose = FALSE)
-  type_col <- sub('(\\A*).roi$', '\\1', basename(mask_filenames[j])) # get column name for matching
-  # cellularity <- mask_cellularity(df %>% filter(t == type_col), mask_area, type_col)
-
-  baseline_roi <- read.ijroi(file.path("./sf_rois", baseline_mask_filenames[i]), verbose = FALSE)
-  # type_col <- sub('(\\A*)_baseline.roi$', '\\1', basename(baseline_mask_filenames[i])) # get column name for matching
-  area <- mask_inter_area(area_mask, baseline_roi, 200)
-  cells <- nrow(df_baseline_masked %>% filter(t == type_col))
-  cellularity <- rbind(cellularity, c(type_col, area, cells, cells/area)) # probably not supposed to do this in a loop but it works
-}
-
-colnames(cellularity) <- c('t', 'area', 'cells', 'cells_per_sqmicron')
-df_baseline_masked <- full_join(df_baseline_masked, cellularity)
-
-# flip all the control angles across the 'y' axis so they match w/ treatment side
-# don't run this directly, it gets called later
-### NOTE: For some reason the LY group ones are reversed? Probably how the section was put on the slide...
-flip_y_angles <- function(df_to_flip) {
-  df_flipped_control <- df_to_flip %>% filter((treatment == 'LY' & side_num == 1) |  (treatment != 'LY' & side_num == 0))
-  df_flipped_control <- df_flipped_control %>% mutate(angle = case_when(angle <= pi ~ pi-angle, angle > pi ~ 3*pi - angle))
-  if ('angle_old' %in% names(df_flipped_control)) {
-    df_flipped_control <- df_flipped_control %>% mutate(angle_old = case_when(angle_old <= pi ~ pi-angle_old, angle_old > pi ~ 3*pi - angle_old))
-  }
-
-  df_original_control <- df_to_flip %>% filter((treatment != 'LY' & side_num == 1) |  (treatment == 'LY' & side_num == 0))
-  df_flipped_control <- rbind(df_flipped_control, df_original_control)
-  return(df_flipped_control)
-}
-
-df <- flip_y_angles(df)
-df_masked <- flip_y_angles(df_masked)
-df_baseline_masked <- flip_y_angles(df_baseline_masked)
+# this bit of code here will calculate area and number of nuclei in that area for 'cellularity'
+res <- 0.2840910 # this is specific to the images for this project, they all have same xy resolution
+df_baseline_masked <- get_cellularity(df_baseline_masked, matches, mask_filenames, baseline_mask_filenames, 200, res)
 
 
 # Check cellularity
@@ -250,26 +284,6 @@ cell_plot <- ggplot(df_cellularity, aes(fill = side, y=cells_per_sqmicron, x=tre
     geom_bar(position="dodge", stat="summary", fun.y=mean) + geom_errorbar(stat='summary', fun.data = mean_sdl, position = position_dodge(0.9))
 plot(cell_plot)
 
-# df <- df %>% mutate(plane_angles = case_when(angle < pi/2 ~ angle + pi,
-#                                              angle > 3*pi/2 ~ angle + pi,
-#                                              TRUE ~ angle))
-
-#OLD
-# df_handangle  <- flip_y_angles(df_handangle)
-# matching_samples <- intersect(df$sample_info, df_handangle$sample_info)
-
-## OLD
-# 0,0 is top left corner of image, all images are 2048x2048
-# can choose y > 1024 to get bottom half?
-# cellpose_wide <- df %>% pivot_wider(names_from = id, values_from = angle)
-# cellpose_wide <- cellpose_wide %>% select(last_col(0:6)) # change based on number of samples
-# cellpose_wide <- apply(cellpose_wide,2, na.omit)
-
-# hand <- df_handangle %>% filter(sample_info %in% matching_samples[27:36] & side == 'control')
-# cellpose <- df %>% filter(sample_info %in% matching_samples[1:14] & side == 'treated' & nuclei_centroidy > 800 & nuclei_centroidx > (2048 - 1200))
-# cellpose2 <- df %>% filter(sample_info %in% matching_samples[1:14] & side == 'control' & nuclei_centroidy > 800 & nuclei_centroidx < 1200)#& nuclei_centroidy > 800 & nuclei_centroidx < 1200)
-# cellpose <- df %>% filter(sample_info == matching_samples[5] & nuclei_centroidy > 800 & nuclei_centroidx < 1200)
-# cellpose2 <- df %>% filter(sample_info == matching_samples[5])
 
 circularize_group <- function(angles) {
   group.circ <- circular(angles, units = 'radians')
