@@ -15,7 +15,7 @@ info_csv_path = Path(data_dir / 'GM130_image_log.csv')
 sample_info = pd.read_csv(info_csv_path)
 
 # get all the stacks we created from stack_channel_split.ijm
-image_directory = (data_dir / 'images').resolve()
+image_directory = (data_dir / 'images' / 'test').resolve()
 image_dirs, images = find_all_filepaths(image_directory, '.tif')
 # find the cellpose models that Charlie helped train
 golgi_model = (data_dir / 'cellpose' / 'models' / 'golgi_lab40X_GM5').resolve()
@@ -59,4 +59,5 @@ for image in images:
     # save results as tiff
     outname = filename + '_cp.tiff'
     io.save_masks(img, masks, flows, filename, png=False, tif=True, savedir=str(output_directory), save_txt=False)
+    # io.save_rois(masks, filename) # this doesn't appear to work ## imagej doesn't have 3D rois...
     print('\n')
