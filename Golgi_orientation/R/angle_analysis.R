@@ -115,17 +115,24 @@ mask_out_centroids <- function(df, mask_filenames, save_img=TRUE) {
 }
 
 
-apply_distance_filter <- function(filtered_df, baseline_roi, type_column, thresh_dist) {
+apply_distance_filter <- function(filtered_df, baseline_roi, type_column, thresh_dist, save_img) {
   centroids <- filtered_df %>% select(nuclei_centroidx, nuclei_centroidy)
   baseline_linestring <- st_linestring(baseline_roi$coords, dim='XY')
   keep <- st_intersection(st_multipoint(data.matrix(centroids), dim='XY'), st_buffer(baseline_linestring, thresh_dist/0.2840910))
+  
+  if (save_img) {
+    p <- ggplot() + geom_point(data = centroids, aes(nuclei_centroidx, nuclei_centroidy), color = 'purple') + geom_sf(data=keep)
+    file_name <- paste(type_column, "_masked_nuclei2.svg")
+    ggsave(filename= file.path('./analysis_output/mask_images', file_name), p)
+  }
+  
   keep <- as.data.frame(as.matrix(keep))
   filtered_df <- inner_join(filtered_df, keep, by=c('nuclei_centroidx' = 'V1', 'nuclei_centroidy' = 'V2'))
   return(filtered_df)
 }
 
 
-filter_baseline_distance <- function(baseline_mask_filenames, df, distance=200) {
+filter_baseline_distance <- function(baseline_mask_filenames, df, distance=200, save_img=TRUE) {
   df_masked <- data.frame()
   for (i in 1:length(baseline_mask_filenames)) {
     # reading in the imagej roi creates a matrix of xy coordinates which can be plugged into sf
@@ -139,7 +146,7 @@ filter_baseline_distance <- function(baseline_mask_filenames, df, distance=200) 
       df_masked <- rbind(df_masked, filtered_df)
     } else {
       # apply the mask to exclude nuclei outside of it
-      filtered_df <- apply_distance_filter(temp_df, baseline_roi, type_col, distance)
+      filtered_df <- apply_distance_filter(temp_df, baseline_roi, type_col, distance, save_img)
       df_masked <- rbind(df_masked, filtered_df) # probably not supposed to do this in a loop but it works
     }
   }
@@ -494,7 +501,7 @@ df_masked <- mask_out_centroids(df, mask_filenames, TRUE)
 # close to the neural ectoderm
 baseline_mask_filenames <- list.files(path="./imagej_rois/baseline_rois/", pattern=".roi$")
 # this is another slow one, be patient
-df_baseline_masked <- filter_baseline_distance(baseline_mask_filenames, df_masked, 200)
+df_baseline_masked <- filter_baseline_distance(baseline_mask_filenames, df_masked, 200, TRUE)
 
 
 #### 2 Cellularity #### 

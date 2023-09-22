@@ -5,6 +5,8 @@ Each directory contains the code needed to analyze a different outcome measure. 
 ## Getting the data
 TBD I need to figure out how the journal wants to host this. The file sizes are quite large. I also don't really want to put it up until we get it published on biorxiv...
 
+![project overview image](/Readme_images/overview_fig_github.png)
+
 ## Getting everything installed
 ### Setting up python
 1. Much of the code runs in python. I recommend using conda for managing the environment and installing needed packages. It's slow but can save headaches in the long run. It can be downloaded [here](https://www.anaconda.com/download). When installing if it asks about 'adding python to path' make sure to select 'no'.

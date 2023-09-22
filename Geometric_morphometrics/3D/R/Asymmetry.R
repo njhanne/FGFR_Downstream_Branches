@@ -216,7 +216,7 @@ cat("ANOVA_FA_FGF", capture.output(summary(ANOVA_ASYM_FGF)),
 summary(SYM_FGF)
 SYM_FGF$DA.component # array with side 1 & side 2
 
-# this doesn't work, may be on purpose but should ask Marta
+# this doesn't work, may be by design but should ask Marta
 ANOVA_DA_FGF  <- procD.lm(SYM_FGF$DA.component ~ classifiers$treatment, 
                           iter=999, RRPP=TRUE, print.progress = FALSE)
 summary(ANOVA_DA_FGF)

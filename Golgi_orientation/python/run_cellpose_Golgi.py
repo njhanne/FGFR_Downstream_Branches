@@ -15,10 +15,10 @@ info_csv_path = Path(data_dir / 'GM130_image_log.csv')
 sample_info = pd.read_csv(info_csv_path)
 
 # get all the stacks we created from stack_channel_split.ijm
-image_directory = (data_dir / 'images' / 'test').resolve()
+image_directory = (data_dir / 'images').resolve()
 image_dirs, images = find_all_filepaths(image_directory, '.tif')
 # find the cellpose models that Charlie helped train
-golgi_model = (data_dir / 'cellpose' / 'models' / 'golgi_lab40X_GM5').resolve()
+golgi_model = (data_dir / 'cellpose' / 'models' / 'golgi_lab40X_GM5').resolve() # TODO rename these
 nuclei_model = (data_dir / 'cellpose' / 'models' / 'Charlie_2D_HumanLoop10').resolve()
 # where to save the cellpose output
 nuclei_directory = (data_dir / 'cellpose' / 'nuclei').resolve()
