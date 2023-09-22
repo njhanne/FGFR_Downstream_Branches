@@ -2,10 +2,11 @@
 Collection of python and R scripts used to analyze data and generate figures in the manuscript. 
 
 Each directory contains the code needed to analyze a different outcome measure. Each can be used independently from each other, they don't require one another except for the 'DirFileHelpers'.
-## Getting the data
-TBD I need to figure out how the journal wants to host this. The file sizes are quite large. I also don't really want to put it up until we get it published on biorxiv...
 
 ![project overview image](/Readme_images/overview_fig_github.png)
+
+## Getting the data
+TBD I need to figure out how the journal wants to host this. The file sizes are quite large. I also don't really want to put it up until we get it published on biorxiv...
 
 ## Getting everything installed
 ### Setting up python
