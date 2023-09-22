@@ -6,9 +6,14 @@
 .DS_Store
 Geometric_morphometrics/3D/data/.DS_Store
 Geometric_morphometrics/3D/data/Landmarks/.DS_Store
+data/*
 	
 # Temporary
 data/Meshes/*.vtk
 Slicer_GPA/*
 Raw_Scans/*
 Old_LMs/*
+Geometric_morphometrics/3D/data/*
+Geometric_morphometrics/3D/figs/*
+Geometric_morphometrics/3D/outliers_figs/*
+Geometric_morphometrics/3D/output/*
