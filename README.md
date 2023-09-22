@@ -1,9 +1,12 @@
 # Downstream branches of FGFR signaling code
-Collection of python and R scripts used to analyze data and generate figures in the manuscript
+Collection of python and R scripts used to analyze data and generate figures in the manuscript. 
 
 Each directory contains the code needed to analyze a different outcome measure. Each can be used independently from each other, they don't require one another except for the 'DirFileHelpers'.
+## Getting the data
+TBD I need to figure out how the journal wants to host this. The file sizes are quite large. I also don't really want to put it up until we get it published on biorxiv...
 
-# Setting up python
+## Getting everything installed
+### Setting up python
 1. Much of the code runs in python. I recommend using conda for managing the environment and installing needed packages. It's slow but can save headaches in the long run. It can be downloaded [here](https://www.anaconda.com/download). When installing if it asks about 'adding python to path' make sure to select 'no'.
 
    If you are on Windows, open up anaconda from the start menu. If Macintosh or Linux then just open a terminal. Create an environment by typing:
@@ -46,10 +49,31 @@ Each directory contains the code needed to analyze a different outcome measure. 
        ```
        Check the terminal to see a message about whether your (optional first step) cuda install was detected "TORCH CUDA version installed and working." should be there if you got it setup right!
 
-3. With the hard part out of the way you can install the rest of the dependencies:
+3. Now you can install the rest of the dependencies:
    ```
    conda install pandas matplotlib scikit-image
    ```
 
+With the hard part out of the way you can move onto more straightforward installs!
 
-# Include info here on setting up Slicer, R, ImageJ
+### R and (recommended) RStudio
+Visit the [RStudio website](https://posit.co/download/rstudio-desktop/) and follow their directions. Comes with directions for installing R, great! Installing the necessary packages in R is much easier than in Python. I will include a (commented out) line of code at the top of each Rscript that you can run to install all the needed packages.
+
+### ImageJ
+I recommend getting the [FIJI version of ImageJ](https://imagej.net/software/fiji/) as it comes with some useful plugins. I don't think any of these plugins are used here... but they are nice to have if you need them. Install by unpacking the downloaded folder and you are all set.
+
+### 3D Slicer
+Visit the [download site](https://download.slicer.org/) and follow the directions for your operating system. We will also need some plugins that are conveniently bundled into the [SlicerMorph Project](https://slicermorph.github.io/). Follow their directions for getting these added into your 3D Slicer install.
+
+## Running the code
+Download this repository on your computer. In the 'FGFR_Downstream_Branches' directory you should see directories named 'DirFileHelpers', 'Geometric_morphometrics', 'Golgi_orientation', and 'Proliferation'. Download the data (TBD) and unpack it into a directory named 'data' in the 'FGFR_Downstream_Branches' directory.
+
+Follow the README directions in each directory on Github for the order the scripts should be run in.
+
+The Python files are designed to be run one at a time. If you open your conda environment, cd to where the Python file is, you can run it by typing:
+```
+python filename
+```
+Some of the scripts require you to change the script slightly before running, I will warn in these Readme files which of the scripts require your input before running them.
+
+R scripts I generally run line by line in RStudio or any IDE. I tried to set them up so that you can just run the entire file at once if you want, but I think it's nice to go line by line so you know what it's doing.
