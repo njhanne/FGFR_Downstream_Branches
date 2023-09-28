@@ -1,6 +1,6 @@
 #### 0.0 Load libraries for packages ####
 # Uncomment and run this the first time to make sure everything gets installed
-# install.packages(c('circular', 'plyr', 'dplyr', 'tidyr', 'stringr', 'RImageJROI', 'sf', 'terra', 'ggplot2', 'RColorBrewer', 'svglite', 'magick'))
+# install.packages(c('circular', 'plyr', 'dplyr', 'tidyr', 'stringr', 'RImageJROI', 'sf', 'terra', 'ggplot2', 'RColorBrewer', 'Hmisc', 'svglite', 'magick'))
 # if terra takes more than 60s to download it will fail
 # run this line: options(timeout = max(1000, getOption("timeout")))
 

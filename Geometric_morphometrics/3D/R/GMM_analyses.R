@@ -1,9 +1,11 @@
 #### 0. Load R packages ####
+# install.packages('devtools')
+# library(devtools)
+# install_github("marta-vidalgarcia/morpho.tools.GM", force = TRUE)
 # install.packages(c('rgl', 'geomorph' 'devtools', 'Morpho', 'Rvcg', 'magick', 'Evomorph', 'ggplot2', 'vegan', 'factoextra', 'gt'))
+
 library(rgl)
 library(geomorph)
-library(devtools)
-# install_github("marta-vidalgarcia/morpho.tools.GM", force = TRUE)
 library(morpho.tools.GM)
 # install_github("marta-vidalgarcia/mesh_process")
 # library(mesh_process)
@@ -19,61 +21,8 @@ library(factoextra)
 library(gt)
 library(abind)
 
-# setwd("~/Documents/GITHUB_repos/FGFR-Branches-GM/")
-# setwd("C:/Users/nhanne/Box/FGF_inhibitor_paper_5-26-2020/Morphology/3D_data")
-setwd("/Users/nhanne/PycharmProjects/FGFR-Branches-GM")
-
-# # Create directories.
-### WILL IT WORK ON WINDOWS???
-# getwd() # where are we? We should always be in the project main directory
-# folder_structure <- c("./figs", "./figs/pc_morphs", "./figs/pc_morphs/head", 
-#                       "./data", "./data/atlas", "./data/Prop_LMs", "./data/Prop_LMs/LM_head", "./output", "./R")
-# 
-# dir.exists(folder_structure) # it should all be false unless you created folders manually. I recommend doing it this way
-# 
-# for (i in 1:length(folder_structure)){
-#   dir.create(folder_structure[i], mode = "0777") # create these folders
-# }
-
-
-# Then save this script inside the R folder
-# Copy landmark data to the Prop_LMs folder
-# Copy atlases inside the data/atlas folder. We will need:
-# PLY of head, endocast & mandible. 
-# CURVESLIDE FILES for endocast, head, mandible
-# ATLAS TAG file for head, endocast, mandible
-# Copy classifiers file inside data and make sure it is a csv and there are no issues
-
-#### 1. LOAD LM DATA & CLASSIFIERS ####
-classifiers_unord  <- read.csv("./data/classifiers.csv", header = TRUE)
-head(classifiers_unord)
-tail(classifiers_unord)
-
-str(classifiers_unord)
-classifiers_unord$treatment <- as.factor(classifiers_unord$treatment)
-row.names(classifiers_unord) <- classifiers_unord$id
-classifiers_unord
-
-#### 2. ANALYSES PREP EMBRYO FACES ####
-#### 2.1 IMPORT LANDMARK DATA ####
-# 1. Import all fcsv files into separate arrays (all specimens for east LM set)
-?morpho.tools.GM::fcsv2array
-
-# LANDMARKS
-setwd("./data/Landmarks/")
-dir()
-LMs <- fcsv2array(string_del = "_Fiducials")
-str(LMs)
-dimnames(LMs)[[3]]
-row.names(classifiers_unord)
-
-dimnames(LMs)[[3]][5] <- "chick_ctr_13"
-
-classifiers <- classifiers_unord[match(dimnames(LMs)[[3]], row.names(classifiers_unord)),]
-
-setwd("../../")
-
-# CURVE SEMILANDMARKS
+#### 0 Helpers ####
+#### 0.1 Landmark loading helpers ####
 fcsv_number_check <- function(dir, pattern) {
   fcsv_list <- dir(dir, pattern = pattern)
   n_land <- vector("numeric", length = length(fcsv_list))
@@ -84,116 +33,155 @@ fcsv_number_check <- function(dir, pattern) {
   return(checker_df)
 }
 
-setwd("./data/Semi_Curves/")
-dir(pattern = "center")
-dir(pattern = "L")
-dir(pattern = "R")
 
+#### 0.2 Mesh and 3D plot helpers ####
+get_dec_mesh <- function(mesh='face') {
+  if (mesh == 'head'){
+    if (file.exists('chick_ctr_1_decimated.ply')) {
+      decimated_mesh <- vcgImport("chick_ctr_1_decimated.ply")
+    } else {
+      full_mesh <- vcgImport("chick_ctr_1.ply") # load 3d mesh of contol embryo
+      decimated_mesh <- vcgQEdecim(full_mesh, percent = 0.15) # decimate mesh to reduce complexity
+      decimated_mesh <- vcgQEdecim(decimated_mesh, percent = 0.25)
+      vcgPlyWrite(decimated_mesh, 'chick_ctr_1_decimated.ply')
+    }
+  } else {
+    if (file.exists('ATLAS_chick_ctr_face_decimated.ply')) {
+      decimated_mesh <- vcgImport("ATLAS_chick_ctr_face_decimated.ply")
+    } else {
+      full_mesh <- vcgImport("ATLAS_chick_ctr_face.ply")
+      decimated_mesh <- vcgQEdecim(full_mesh, percent = 0.15)
+      vcgPlyWrite(decimated_mesh, 'ATLAS_chick_ctr_face_decimated.ply')
+    }
+  }
+  return(decimated_mesh)
+}
+
+
+plot_3d_LMs <- function(LMs, color) {
+  # this will plot the landmarks in the specifid color
+  # need to already have a rgl window open
+  rgl::plot3d(LMs[,,1], aspect = "iso", type = "s", size=.5, col = color, add = T)
+  rgl::text3d(x = LMs[,1,1],
+              y = LMs[,2,1],
+              z = LMs[,3,1],
+              texts = c(1:dim(LMs)[1]),
+              cex = 1.5, offset = 0.5, pos = 1)
+}
+
+
+#### Main ####
+#### 1.0 Setting up the DF ####
+# R doesn't have a good way to get the path of where this file is located, unfortunately
+# if you are running this code in Rstudio, try this:
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+getwd() #check our working directory
+setwd("../../../data/Morphology/3D")
+getwd() #check our working directory
+# if you aren't using rstudio, use the command setwd() 
+# and point it to the data/Morphology/3D directory
+
+
+# Then save this script inside the R folder
+# Copy landmark data to the Prop_LMs folder
+# Copy atlases inside the data/atlas folder. We will need:
+# PLY of head, endocast & mandible. 
+# CURVESLIDE FILES for endocast, head, mandible
+# ATLAS TAG file for head, endocast, mandible
+# Copy classifiers file inside data and make sure it is a csv and there are no issues
+
+
+#### 1.1 Load LM data and classifiers ####
+classifiers_unord  <- read.csv("./lm_data/classifiers.csv", header = TRUE)
+classifiers_unord$treatment <- as.factor(classifiers_unord$treatment)
+row.names(classifiers_unord) <- classifiers_unord$id
+
+
+#### 1.2 Import landmark data ####
+# 1. Import all fcsv files into separate arrays (all specimens for east LM set)
+# Traditional landmarks
+setwd("./lm_data/Landmarks/") # directory with all the fcsv files in it
+LMs <- fcsv2array(string_del = "_Fiducials") # cleanup filenames, from morphotools library
+
+# match the landmark sample names to the classifiers csv
+classifiers <- classifiers_unord[match(dimnames(LMs)[[3]], row.names(classifiers_unord)),]
+
+
+# Curve semilandmarks
+setwd("../Semi_Curves/")
+# finds all files with the pattern in the name
 curve_semis_center <- fcsv2array(pattern = "*center*", string_del = "_center_semi-curve")
 curve_semis_L <- fcsv2array(pattern = "*_L_semi-curve*", string_del = "_L_semi-curve")
 curve_semis_R <- fcsv2array(pattern = "*_R_semi-curve*", string_del = "_R_semi-curve")
 
-str(curve_semis_center)
-str(curve_semis_L)
-str(curve_semis_R)
 
-dimnames(curve_semis_center)[[3]]
-dimnames(curve_semis_L)[[3]]
-dimnames(curve_semis_R)[[3]]
-
-
-# SURFACE SEMILANDMARKS
-
+# Surface semilandmarks grid
 setwd("../Semi_Points/")
-
-dir()
 surf_semis_L <- fcsv2array(pattern = "*_L_semi-lm*", string_del = "_L_semi-lm")
 surf_semis_R <- fcsv2array(pattern = "*_R_semi-lm*", string_del = "_R_semi-lm")
 
-setwd("../../")
+setwd("../../") # back to '3D' dir
 
-#### 2.2. NEW ARRAY ####
+#### 1.3 Combine LM data ####
 # Combine all arrays into a single one, in a particular order that makes sense for our GMM
-# CENTRE CURVE
-# Delete positions #1 & #5 in curve_semis_center
+# Centre curve
+# Delete positions #1 & #5 in curve_semis_center as they are traditional landmarks
 curve_semis_center <- curve_semis_center[-c(1,5),,]
-
+# combine LMs, should have an rray of 51 landmarks and 54 samples
 head_array <- abind(LMs, curve_semis_center, curve_semis_L, curve_semis_R, surf_semis_L, 
                     surf_semis_R, along = 1)
 
-head_array_no_dorsal_curve <- abind(LMs, curve_semis_center, surf_semis_L, curve_semis_R, along = 1)
 
-dimnames(head_array)[[3]]
-
-dim(LMs)[1]
-dim(curve_semis_center)[1]
-dim(curve_semis_L)[1]
-dim(curve_semis_R)[1]
-dim(surf_semis_L)[1]
-dim(surf_semis_R)[1]
-
-
-#### 2.3. CURVESLIDE ####
+#### 1.4 Curveslide ####
 # Generate a curveslide file for the GPA that tells us how the curve semis have to slide (constrained)
-
-# curve semis positions
+# this is the same as what we had to do in the 2D code
+# curve semis positions, based on the abind for the head_array, above
 semis_center <- (dim(LMs)[1]+1):(dim(LMs)[1]+dim(curve_semis_center)[1])
 semis_L <- (dim(LMs)[1]+dim(curve_semis_center)[1]+1):(dim(LMs)[1]+dim(curve_semis_center)[1]+dim(curve_semis_L)[1])
 semis_R <- (dim(LMs)[1]+dim(curve_semis_center)[1]+dim(curve_semis_L)[1]+1):(dim(LMs)[1]+dim(curve_semis_center)[1]+dim(curve_semis_L)[1]+dim(curve_semis_R)[1])
 
-# PLOTTING THE LANDMARKS TO CHECK THE SEMIS
-head_mesh_spec1 <- vcgImport("./data/Meshes/chick_ctr_1.ply") # Not sure what is wrong with this mesh
-head_mesh_spec1_dec <- vcgQEdecim(head_mesh_spec1, percent = 0.15)
-head_mesh_spec1_dec <- vcgQEdecim(head_mesh_spec1_dec, percent = 0.25)
+# Plot the landmarks to check placement of semis
+# this loads in a simplified mesh of a control embryo
+# it can take a long time if it's the first time you've run it
+setwd("./lm_data/Meshes/")
+head_mesh_spec1_dec <- get_dec_mesh('head')
+setwd("../../")
 
+# make a 3D plot
 open3d(zoom = 0.75, windowRect = c(0, 0, 700, 700)) 
+
+# plot the decimated head mesh
 rgl::shade3d(head_mesh_spec1_dec, color = "gray", alpha =0.9)
-rgl::plot3d(LMs[,,1], aspect = "iso", type = "s", size=1.2, col = "darkblue", add = T)
-rgl::text3d(x = LMs[,1,1],
-            y = LMs[,2,1],
-            z = LMs[,3,1],
-            texts = c(1:dim(LMs)[1]),
-            cex = 1.5, offset = 0.5, pos = 1)
+# plot the landmarks in blue
+plot_3d_LMs(LMs, 'darkblue')
+# plot the center curve in orange
+plot_3d_LMs(curve_semis_center, 'orange')
+# plot the right curve in orange
+plot_3d_LMs(curve_semis_R, 'orange')
+# plot the left curve in orange
+plot_3d_LMs(curve_semis_L, 'orange')
 
-rgl::plot3d(curve_semis_center[,,1], aspect = "iso", type = "s", size=0.5, col = "orange", add = T)
-rgl::text3d(x = curve_semis_center[,1,1],
-            y = curve_semis_center[,2,1],
-            z = curve_semis_center[,3,1],
-            texts = c(1:dim(curve_semis_center)[1]),
-            cex = 0.75, offset = 0.5, pos = 2)
-
-rgl::plot3d(curve_semis_R[,,1], aspect = "iso", type = "s", size=0.75, col = "orange", add = T)
-rgl::text3d(x = curve_semis_R[,1,1],
-            y = curve_semis_R[,2,1],
-            z = curve_semis_R[,3,1],
-            texts = c(1:dim(curve_semis_R)[1]),
-            cex = 0.75, offset = 0.5, pos = 2)
-
-rgl::plot3d(curve_semis_L[,,1], aspect = "iso", type = "s", size=0.75, col = "orange", add = T)
-rgl::text3d(x = curve_semis_L[,1,1],
-            y = curve_semis_L[,2,1],
-            z = curve_semis_L[,3,1],
-            texts = c(1:dim(curve_semis_L)[1]),
-            cex = 0.75, offset = 0.5, pos = 2)
-rgl.close()
+rgl::close3d() # close plot
 
 
-# CENTER CURVE - CURVESLIDE
+# Center curve - sliding landmarks
 # We need to create a curveslide matrix to know where from to where to the semis slide
+# landmarks 9 & 10 will be treated as fixed landmarks!
 # semi1 slides between LM9 & semi2
 # semi2 slides between semi1 & semi3
 # semi3 slides between semi2 & LM10
-curve_c_left <- c(9, semis_center[c(1,2)])
+curve_c_left <- c(9, semis_center[c(1,2)])h
 curve_c_right <- c(semis_center[c(2,3)], 10)
 curveslide_c <- cbind(curve_c_left, semis_center, curve_c_right)
 
-# RIGHT & LEFT CURVES - positions from top to bottoms
-curve_L_left <- semis_L[c(1:(length(semis_L)-2))] # remember that landmarks 16 & 24 will be treated as landmarks!
-# Change them later for the final analyses to slide between the nasal pits and the next semis
+# Right and left curves - positions from top to bottoms
+# Similar to the center sliders, the LNP landmarks 16 & 24 will be treated as fixed landmarks!
+curve_L_left <- semis_L[c(1:(length(semis_L)-2))] 
 curve_L_right <- semis_L[c(3:length(semis_L))]
 curve_L_center <- semis_L[c(2:(length(semis_L)-1))]
 curveslide_L <- cbind(curve_L_left, curve_L_center, curve_L_right)
 
+# Similar to the center sliders, the LNP landmarks 25 & 33 will be treated as fixed landmarks!
 curve_R_left <- semis_R[c(1:(length(semis_R)-2))] 
 curve_R_right <- semis_R[c(3:length(semis_R))]
 curve_R_center <- semis_R[c(2:(length(semis_R)-1))]
@@ -201,65 +189,41 @@ curveslide_R <- cbind(curve_R_left, curve_R_center, curve_R_right)
 
 
 # all our curveslide matrices
-ls(pattern = "curveslide*")
 curveslide_list <- lapply(ls(pattern = "curveslide*"), get)
-str(curveslide_list)
 curveslide_all <- do.call(rbind, curveslide_list)
 curveslide_all <- as.data.frame(curveslide_all)
 colnames(curveslide_all) <- c("left", "sliding", "right")
-write.csv(curveslide_all, "./data/curveslide.csv", row.names = FALSE)
+write.csv(curveslide_all, "./lm_data/curveslide.csv", row.names = FALSE)
 
-# curveslide_all <- read.csv("./data/curveslide.csv")
 
-# Surface landmarks
+#### 1.5 Surface semi-landmarks ####
 head_surface.lm <- (dim(LMs)[1]+dim(curve_semis_center)[1]+dim(curve_semis_L)[1]+dim(curve_semis_R)[1]+1):dim(head_array)[1]
-# head_surface.lm2 <- (dim(LMs)[1]+dim(curve_semis_center)[1]+1):dim(head_array_no_dorsal_curve)[1]
 
 
-#### 2.5. GPA ####
+#### 2 GPA and plots ####
+#### 2.1 GPA ####
 # Use this to find out who is the closest to the shape sphere centroid
-str(head_array)
-GPA_head_o <- geomorph::gpagen(A = head_array, curves = as.matrix(curveslide_all), 
+GPA_head <- geomorph::gpagen(A = head_array, curves = as.matrix(curveslide_all), 
                              surfaces = head_surface.lm)
-
-outlier <- plotOutliers_percentile(A = GPA_head_o$coords, percentile = 0.99, save.plot = FALSE)
-
-saveRDS(head_array, "./data/Head_LM_array_FGF_embryos.rds")
-saveRDS(GPA_head_o, "./data/GPA_FGF_embryos.rds")
-
-# GPA_head_o2 <- geomorph::gpagen(A = head_array_no_dorsal_curve, curves = as.matrix(curveslide_c), 
-#                                surfaces = head_surface.lm2)
-# 
-# outlier <- plotOutliers_percentile(A = GPA_head_o2$coords, percentile = 0.99, save.plot = TRUE)
-# # Looks very much like an outlier. Maybe some errors in the landmarking? Ask Nicholas
-
-# Get rid of it until Nicholas fixes the landmarks
-# clean_head_array <- head_array[,,-which(dimnames(head_array)[[3]] == row.names(outlier$Proc_d_percentile))]
-# 
-# GPA_head <- geomorph::gpagen(A = clean_head_array, curves = as.matrix(curveslide_all), 
-#                                surfaces = head_surface.lm)
-
-
-# outliers_c <- plotOutliers_percentile(A = GPA_head$coords, percentile = 0.90, save.plot = FALSE)
-# They don't look like outliers to me, just a more severe phenotype
-# excellent, keep going
-
-# For the atlas we are going to: (1) perform a GPA, (2) find the specimens the closest to the center of the morphospace
-# Pdist <- ShapeDist(GPA_head$coords, GPA_head$consensus)
-# find who it is
+# check for outliers
+# looks fine, outlier is just heavily affected
+outlier <- plotOutliers_percentile(A = GPA_head$coords, percentile = 0.99, save.plot = FALSE)
 min(outlier$All_Proc_d$`Proc. d. from mean`) # actually I got lazy & did it this easier way, same concept as above though
 row.names(outlier$All_Proc_d[which(outlier$All_Proc_d$`Proc. d. from mean` == min(outlier$All_Proc_d$`Proc. d. from mean`)),])
-# Ah, very nice! Need to clean this mesh on meshlab now: "chick_ctr_23"
 
-# Actually we are using chick_ctr_23
+# save progress
+saveRDS(head_array, "./lm_data/Head_LM_array_FGF_embryos.rds")
+saveRDS(GPA_head, "./lm_data/GPA_FGF_embryos.rds")
 
-# classifiers <- classifiers[-which(row.names(classifiers) == "chick_exp_3"),]
-#### 3. ATLAS HEAD & PLOTS ####
-# (hypervolume) - which means the smalles Procrustes distance, (3) use the set of LMs & mesh of that specimen
-head_mesh <- geomorph::read.ply("./data/ATLAS_chick_ctr_23_smooth_ascii_no_back.ply") # Not sure what is wrong with this mesh
-head_mesh <- geomorph::read.ply("./data/ATLAS_chick_ctr_23_smooth_ascii_only_face.ply")
-head_lowres <- vcgQEdecim(head_mesh, percent = 0.15)
 
+#### 2.2 Atlas head and plots ####
+setwd('./lm_data/Meshes/')
+# in this case I have already made a cleaned up mesh of just the face
+# I used chick_ctr_23 as the mesh, so it will be out 'atlas'
+face_mesh <- get_dec_mesh('face')
+setwd("../../")
+
+# load up the landmarks for our atlas mesh
 atlas_head_lm <- head_array[,, which(dimnames(head_array)[[3]] == "chick_ctr_23")]
   
 # Divide the data into type of landmark
@@ -270,107 +234,48 @@ head_surface.lm <- head_surface.lm
 
 # Plot the mesh with the landmarks, curve semi-landmarks, and surface semi-landmarks
 open3d(zoom = 0.75, windowRect = c(0, 0, 700, 700)) # bigger rgl window
-shade3d(head_lowres, color = "gray", alpha = 0.8) # alpha for transparency
+shade3d(face_mesh, color = "gray", alpha = 0.8) # alpha for transparency
 
-# dorsal <- par3d()$userMatrix
+# you need to click and move mouse around in the figure until it is en-face with
+# the window, then run the line below to save the orientation
 frontal <- par3d()$userMatrix
-dorsal <- par3d()$userMatrix
-rgl.close()
+rgl.close3d()
 
-save(frontal, dorsal, file = "./data/RGL_head_pos.rdata")
-
-
-load("./data/RGL_head_pos.rdata")
-
-# dorsal view
-open3d(zoom = 0.75, userMatrix = dorsal, windowRect = c(0, 0, 1000, 700))
-rgl::shade3d(head_mesh, color = "gray", alpha =0.9)
-rgl::plot3d(atlas_head_lm[head_fixed.lm,], aspect = "iso", type = "s", size=1.2, col = "darkblue", add = T)
-# rgl::text3d(x = atlas_head_lm[head_fixed.lm, 1],
-#             y = atlas_head_lm[head_fixed.lm, 2],
-#             z=  atlas_head_lm[head_fixed.lm, 3],
-#             texts = row.names(atlas_head_lm[head_fixed.lm, ]),
-#             cex = 1.5, offset = 0.5, pos = 3)
-rgl::plot3d(atlas_head_lm[head_curves.lm,], aspect = "iso", type = "s", size=0.75, col = "orange", add = T)
-rgl::plot3d(atlas_head_lm[head_surface.lm,], aspect = "iso", type = "s", size=0.6, col = "turquoise2", add = T)
-rgl::rgl.snapshot("./figs/head_LM_dorsal.png", top = TRUE)
-rgl::rgl.close()
+save(frontal, file = "./lm_data/RGL_head_pos.rdata")
+load("./lm_data/RGL_head_pos.rdata")
 
 # Frontal view
+# this figure is in the manuscript
 open3d(zoom = 0.75, userMatrix = frontal, windowRect = c(0, 0, 1000, 700)) 
-rgl::shade3d(head_mesh, color = "gray", alpha =1,specular = "black" )
-# material3d(shininess = 0)
-# rgl::pop3d('lights')
-# light3d(x = -50, y = 100, z = 100, ambient = "black")
-# rgl::light3d(phi = 75)
-# rgl::light3d(phi = -15, theta = 60)
-# rgl::light3d(phi = -15, theta = -80)
+rgl::shade3d(face_mesh, color = "gray", alpha =1, specular = "black" )
 rgl::plot3d(atlas_head_lm[head_fixed.lm,], aspect = "iso", type = "s", size=.8, col = "black", add = T)
 rgl::plot3d(atlas_head_lm[head_curves.lm,], aspect = "iso", type = "s", size=0.8, col = "orange", add = T)
 rgl::plot3d(atlas_head_lm[head_surface.lm,], aspect = "iso", type = "s", size=0.8, col = "turquoise2", add = T)
-rgl::rgl.snapshot("./figs/head_LM_frontal.png", top = TRUE)
+rgl::snapshot("./figs/head_LM_frontal.png", top = TRUE)
 writeASY(title = "head_LM_frontal", prc = FALSE)
-rgl::rgl.close()
-
-# Combine the two views
-dorsal_lm <- image_read("./figs/head_LM_dorsal.png")
-dorsal_lm <- image_annotate(dorsal_lm, "Dorsal", font = "times", location = "+80+120", size = 50)
-dorsal_lm <- image_crop(dorsal_lm, "1000x500+0+90")
-dorsal_lm
-
-frontal_lm <- image_read("./figs/head_LM_frontal.png")
-frontal_lm <- image_annotate(frontal_lm, "Frontal", font = "times", location = "+80+120", size = 50)
-frontal_lm <- image_crop(frontal_lm, "1000x500+0+90")
-frontal_lm
-
-stack_views <- c(dorsal_lm, frontal_lm)
-stacked_images <- image_append(image_scale(stack_views), stack = TRUE)
-
-image_browse(stacked_images)
-image_write(stacked_images, path = "./figs/LM_scheme_all_views.png", format = "png")
+rgl::close3d()
 
 
 #### 4. PCA plots HEAD ####
-PCA_head <- gm.prcomp(GPA_head_o$coords)
+PCA_head <- gm.prcomp(GPA_head$coords)
 summary(PCA_head)
-str(PCA_head)
 
 # Delete file if it exists
 if (file.exists("./output/PCA_head_shape_coords.txt")) {
   file.remove("./output/PCA_head_shape_coords.txt")
 }
+if (!dir.exists('./output/')) dir.create('./output/')
 cat("PCA shape variables raw", capture.output(summary(PCA_head)), 
     file="./output/PCA_head_shape_coords.txt", sep="\n", append=TRUE)
 
-# # Make a different table to get HTML table (or latex)
-# eigenvalues <- round(PCA_head$d, digits = 5)
-# prop_var <- round(PCA_head$d*100/sum(PCA_head$d), digits = 3)
-# cumul_var <- round(cumsum(PCA_head$d)*100/sum(PCA_head$d), digits = 3)
-# 
-# 
-# PCA_head_summary <- as.data.frame(rbind(eigenvalues, prop_var, cumul_var))
-# colnames(PCA_head_summary) <- paste0(rep("PC", length(colnames(PCA_head_summary))),
-#                                       c(1:length(colnames(PCA_head_summary))))
-# PCA_head_summary <- as.data.frame(cbind(c("Eigenvalues", "Proportion of Variance (%)",
-#                                            "Cumulative Variance (%)"), PCA_head_summary))
-# colnames(PCA_head_summary)[1] <- c(" ")
-# 
-# PCA_summary_table <- PCA_head_summary %>%
-#   gt() %>%
-#   tab_header("Principal Component Analysis - head")
-# 
-# ?gtsave
-# gtsave(PCA_summary_table, "./figs/PCA_head_summary.html")
 
-
-levels(classifiers$treatment)
-palette(c("navy", "darkorange"))
+palette(c("navy", "darkorange")) # this is fine, we'll change it in illustrator
 classifiers$treatment <- as.character(classifiers$treatment)
 classifiers$treatment <- as.factor(classifiers$treatment)
 
-# png("./figs/PCA_head_shape_treatment_raw.png", width = 750, height = 600)
+# this figure is in the manuscript
 pdf("./figs/PCA_head_shape_treatment_raw.pdf", width = 8.25, height = 6)
-plot(PCA_head, pch = 19, col = classifiers$treatment, cex = 1.25)
+plot(PCA_head, pch = 19, col = classifiers$treatment, cex = 1.25, xlim=c(-.1,.15))
 ordiellipse(PCA_head, classifiers$treatment, kind="sd",conf=0.95, col = palette(),
             draw = "polygon", alpha = 0.2, lty = 0)
 legend("topright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
@@ -439,9 +344,9 @@ dev.off()
 
 classifiers
 
-Pdist <- ShapeDist(GPA_head_o$coords, GPA_head_o$consensus)
+Pdist <- ShapeDist(GPA_head$coords, GPA_head$consensus)
 
-gdf_head <- geomorph.data.frame(GPA_head_o, treatment = classifiers$treatment, Pdist = Pdist)
+gdf_head <- geomorph.data.frame(GPA_head, treatment = classifiers$treatment, Pdist = Pdist)
 
 
 ggplot_df <- as.data.frame(cbind(as.character(gdf_head$Csize), 
@@ -535,9 +440,9 @@ cat("ANOVA Csize - treatment (Csize ~ treatment)", capture.output(summary(one_wa
 #### 7.1. HEAD HEATMAPS group means ####
 
 # load mesh of the specimen closest to the mean shape
-head_mesh <- geomorph::read.ply("./data/ATLAS_chick_ctr_23_smooth_ascii_only_face.ply") 
+face_mesh <- geomorph::read.ply("./data/ATLAS_chick_ctr_23_smooth_ascii_only_face.ply") 
 # The mesh should only be surface, and be just have the frontal side here
-head_lowres <- vcgQEdecim(head_mesh, percent = 0.15)
+head_lowres <- vcgQEdecim(face_mesh, percent = 0.15)
 atlas_head_lm <- head_array[,, which(dimnames(head_array)[[3]] == "chick_ctr_23")]
 
 levels(gdf_head$treatment)
@@ -617,11 +522,11 @@ image_write(stack_img, path = paste0("./figs/CTRL_MUT_morphs_heatmaps_head.png")
 
 ####7.2. HEATMAPS - PC1-10 ####
 
-PC_min <- tps3d(head_mesh, as.matrix(atlas_head_lm), PCA_head$shapes[[1]]$min, threads = 1)
+PC_min <- tps3d(face_mesh, as.matrix(atlas_head_lm), PCA_head$shapes[[1]]$min, threads = 1)
 open3d(zoom=0.75, userMatrix = dorsal, windowRect= c(0,0,1000,700))
 shade3d(PC_min, color="grey")
 
-PC_max <- tps3d(head_mesh, as.matrix(atlas_head_lm), PCA_head$shapes[[1]]$max, threads = 1)
+PC_max <- tps3d(face_mesh, as.matrix(atlas_head_lm), PCA_head$shapes[[1]]$max, threads = 1)
 open3d(zoom=0.75, userMatrix = dorsal, windowRect= c(0,0,1000,700))
 shade3d(PC_max, color="grey")
 
