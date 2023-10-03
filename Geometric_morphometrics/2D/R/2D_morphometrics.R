@@ -84,10 +84,10 @@ define_pal <- function() {
 
 
 plot_symmetry_PC <- function(PC_data, classifiers, pal, tit) {
-  plot(PC_data, pch = 19, col = classifiers$treatment, cex = 1.25)
+  plot(PC_data, pch = 16, col = classifiers$treatment, cex = 1.25)
   ordiellipse(PCA_SYM, classifiers$treatment, kind="sd",conf=0.95, col = pal,
               draw = "polygon", alpha = 0, lty = 1, border = pal)
-  legend("bottomleft", pch = 19, col = pal, legend = levels(classifiers$treatment))
+  legend("bottomleft", pch = 16, col = pal, legend = levels(classifiers$treatment))
   title(title())
 }
 
@@ -221,7 +221,7 @@ gpa_FNP_semi_df <- gpa_FNP_semi_df %>% mutate(treatment = recode(treatment, 'Mix
 gpa_FNP_semi_df <- gpa_FNP_semi_df %>% mutate(stage = recode(stage, '1' = '18', '2' = '19', '3' = '20'))
 
 
-#### 3.2 Centroid sizec Procruste's distance, allometry ####
+#### 3.2 Centroid size, Procruste's distance, allometry ####
 # make a nice color palette 
 # https://jfly.uni-koeln.de/color/
 pal <- define_pal()
@@ -254,7 +254,7 @@ plotAllometry(allo_all, size = gdf_semi$cs, method="RegScore")
 pcplot <- plotAllometry(allo_all, size = gdf_semi$cs, method="size.shape", col = gdf_semi$treatment, pch = as.integer(gdf_semi$stage))
 ordiellipse(pcplot$size.shape.PCA, gdf_semi$treatment, kind="sd",conf=0.95, col = palette(),
             draw = "polygon", alpha = 0, lty = 1, border = palette())
-legend("topright", pch = 19, col = palette(), legend = levels(gdf_semi$treatment))
+legend("topright", pch = 16, col = palette(), legend = levels(gdf_semi$treatment))
 legend("bottomright", pch = as.integer(unique(gdf_semi$stage)), legend = as.character(unique(gdf_semi$stage)))
 
 
@@ -341,7 +341,7 @@ p %>%
   insert_yaxis_grob(py, grid::unit(1, "in"), position = "right") %>%
   ggdraw()
 
-legend("topright", pch = 19, col = palette(), legend = levels(classifiers_filter))
+legend("topright", pch = 16, col = palette(), legend = levels(classifiers_filter))
 title("PCA of shape coordinates")
 dev.off()
 dev.off()
@@ -349,10 +349,10 @@ dev.off()
 # this one generates the 95% CI ellipses
 png("./figs/PCA_head_shape_treatment_FNP_full_semi_4.png", units = "in", width = 8.25, height = 6, res=300)
 pdf("./figs/PCA_head_shape_treatment_FNP_full_semi_4.pdf", width = 8.25, height = 6)
-plot(PCA_FNP_initial, pch = 19, col = classifiers_filter, cex = .8, stroke=0)
+plot(PCA_FNP_initial, pch = 16, col = classifiers_filter, cex = .8, stroke=0)
 ordiellipse(PCA_FNP_initial, classifiers_filter, kind="sd",conf=0.95, col = palette(),
             draw = "polygon", alpha = 0, lty = 1, border = palette())
-legend("topright", pch = 19, col = palette(), legend = levels(classifiers_filter))
+legend("topright", pch = 16, col = palette(), legend = levels(classifiers_filter))
 title("PCA of shape coordinates")
 dev.off()
 dev.off()

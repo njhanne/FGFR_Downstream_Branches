@@ -70,6 +70,87 @@ plot_3d_LMs <- function(LMs, color) {
 }
 
 
+get_palette <- function() {
+  return(c("#bbbbbb", "#882256"))
+}
+
+
+plot_pc_table <- function(PCA_head, classifiers) {
+  par(mfrow=c(3,2))
+  plot(PCA_head, pch = 16, axis1 = 1, axis2 = 2, col = pal[as.numeric(classifiers$treatment)], cex = 1.25)
+  ordiellipse(PCA_head, classifiers$treatment, kind="sd",conf=0.95, border = pal,
+              draw = "polygon", alpha = 0, lty = 1)
+  legend("topright", pch = 16, col = pal, legend = levels(classifiers$treatment))
+  title("PC1 ~ PC2")
+  
+  plot(PCA_head, pch = 16, axis1 = 1, axis2 = 3, col = pal[as.numeric(classifiers$treatment)], cex = 1.25)
+  ordiellipse(PCA_head$x[,c(1,3)], classifiers$treatment, kind="sd",conf=0.95, border = pal,
+              draw = "polygon", alpha = 0, lty = 1)
+  legend("bottomright", pch = 16, col = pal, legend = levels(classifiers$treatment))
+  title("PC1 ~ PC3")
+  
+  plot(PCA_head, pch = 16, axis1 = 1, axis2 = 4, col = pal[as.numeric(classifiers$treatment)], cex = 1.25)
+  ordiellipse(PCA_head$x[,c(1, 4)], classifiers$treatment, kind="sd",conf=0.95, border = pal,
+              draw = "polygon", alpha = 0, lty = 1)
+  legend("topright", pch = 16, col = pal, legend = levels(classifiers$treatment))
+  title("PC1 ~ PC4")
+  
+  plot(PCA_head, pch = 16, axis1 = 2, axis2 = 3, col = pal[as.numeric(classifiers$treatment)], cex = 1.25)
+  ordiellipse(PCA_head$x[,c(2,3)], classifiers$treatment, kind="sd",conf=0.95, border = pal,
+              draw = "polygon", alpha = 0, lty = 1)
+  legend("bottomleft", pch = 16, col = pal, legend = levels(classifiers$treatment))
+  title("PC2 ~ PC3")
+  
+  plot(PCA_head, pch = 16, axis1 = 2, axis2 = 4, col = pal[as.numeric(classifiers$treatment)], cex = 1.25)
+  ordiellipse(PCA_head$x[,c(2,4)], classifiers$treatment, kind="sd",conf=0.95, border = pal,
+              draw = "polygon", alpha = 0, lty = 1)
+  legend("topright", pch = 16, col = pal, legend = levels(classifiers$treatment))
+  title("PC2 ~ PC4")
+  
+  plot(PCA_head, pch = 16, axis1 = 3, axis2 = 4, col = pal[as.numeric(classifiers$treatment)], cex = 1.25)
+  ordiellipse(PCA_head$x[,3:4], classifiers$treatment, kind="sd",conf=0.95, border = pal,
+              draw = "polygon", alpha = 0, lty = 1)
+  legend("topright", pch = 16, col = pal, legend = levels(classifiers$treatment))
+  title("PC3 ~ PC4")
+}
+
+
+plot_pc_heatmap <- function(face_mesh, atlas_head_lm, PCA_head, dimensions) {
+  for (i in 1:n_dimensions){
+    PC_min <- tps3d(face_mesh, as.matrix(atlas_head_lm), PCA_head$shapes[[i]]$min, threads = 1)
+    PC_max <- tps3d(face_mesh, as.matrix(atlas_head_lm), PCA_head$shapes[[i]]$max, threads = 1)
+    PC <- paste0("PC", i)
+    
+    #PCmax
+    open3d(zoom=0.75, userMatrix = heatmap_frontal, windowRect= c(0,0,1000,700))
+    shade3d(PC_max, color="grey", specular='black')
+    rgl.snapshot(paste0("./figs/pc_morphs/",PC,"_","max.png"), top = TRUE )
+    clear3d()
+    rgl::close3d()
+    
+    #PCmin
+    open3d(zoom=0.75, userMatrix = heatmap_frontal, windowRect= c(0,0,1000,700))
+    shade3d(PC_min, color="grey", specular='black')
+    rgl.snapshot(paste0("./figs/pc_morphs/",PC,"_","min.png"), top = TRUE )
+    clear3d()
+    rgl::close3d()
+    
+    #Heatmaps
+    open3d(zoom=0.75, userMatrix = heatmap_frontal, windowRect= c(0,0,1000,700))
+    x11(width=1.7, height=8)
+    meshDist(PC_min, PC_max, rampcolors = c("darkblue", "blue", "white", "red", "darkred"), sign = TRUE)
+    rgl.snapshot(paste0("./figs/pc_morphs/heat_",PC,".png"), top = TRUE)
+    # dev.copy(pdf, paste0("./figs/pc_morphs/head/heat_",PC,"_scale.pdf"), width=2, height=9.5)
+    dev.print(pdf, paste0("./figs/pc_morphs/heat_",PC,"_scale.pdf"), width=2, height=9.5)
+    dev.off()
+    clear3d()
+    rgl::close3d()
+    
+    rm(PC_max, PC_min, PC) 
+  }
+}
+
+
 #### Main ####
 #### 1.0 Setting up the DF ####
 # R doesn't have a good way to get the path of where this file is located, unfortunately
@@ -200,8 +281,8 @@ write.csv(curveslide_all, "./lm_data/curveslide.csv", row.names = FALSE)
 head_surface.lm <- (dim(LMs)[1]+dim(curve_semis_center)[1]+dim(curve_semis_L)[1]+dim(curve_semis_R)[1]+1):dim(head_array)[1]
 
 
-#### 2 GPA and plots ####
-#### 2.1 GPA ####
+#### 2 GPA, PCA, mean shape analysis ####
+#### 2.1 GPA of mean shape ####
 # Use this to find out who is the closest to the shape sphere centroid
 GPA_head <- geomorph::gpagen(A = head_array, curves = as.matrix(curveslide_all), 
                              surfaces = head_surface.lm)
@@ -239,7 +320,7 @@ shade3d(face_mesh, color = "gray", alpha = 0.8) # alpha for transparency
 # you need to click and move mouse around in the figure until it is en-face with
 # the window, then run the line below to save the orientation
 frontal <- par3d()$userMatrix
-rgl.close3d()
+rgl::close3d()
 
 save(frontal, file = "./lm_data/RGL_head_pos.rdata")
 load("./lm_data/RGL_head_pos.rdata")
@@ -251,16 +332,16 @@ rgl::shade3d(face_mesh, color = "gray", alpha =1, specular = "black" )
 rgl::plot3d(atlas_head_lm[head_fixed.lm,], aspect = "iso", type = "s", size=.8, col = "black", add = T)
 rgl::plot3d(atlas_head_lm[head_curves.lm,], aspect = "iso", type = "s", size=0.8, col = "orange", add = T)
 rgl::plot3d(atlas_head_lm[head_surface.lm,], aspect = "iso", type = "s", size=0.8, col = "turquoise2", add = T)
-rgl::snapshot("./figs/head_LM_frontal.png", top = TRUE)
-writeASY(title = "head_LM_frontal", prc = FALSE)
+rgl.snapshot("./figs/head_LM_frontal.png", top = TRUE)
+# writeASY(title = "./figs/head_LM_frontal",outtype = 'pdf', prc = FALSE)
 rgl::close3d()
 
 
-#### 4. PCA plots HEAD ####
+#### 2.3. Mean shape PCA plots ####
+# perform PCA
 PCA_head <- gm.prcomp(GPA_head$coords)
-summary(PCA_head)
 
-# Delete file if it exists
+# Save output, delete file if it exists
 if (file.exists("./output/PCA_head_shape_coords.txt")) {
   file.remove("./output/PCA_head_shape_coords.txt")
 }
@@ -268,141 +349,92 @@ if (!dir.exists('./output/')) dir.create('./output/')
 cat("PCA shape variables raw", capture.output(summary(PCA_head)), 
     file="./output/PCA_head_shape_coords.txt", sep="\n", append=TRUE)
 
-
-palette(c("navy", "darkorange")) # this is fine, we'll change it in illustrator
+pal <- get_palette() # get color map used for figures
 classifiers$treatment <- as.character(classifiers$treatment)
 classifiers$treatment <- as.factor(classifiers$treatment)
 
+# Plot PC1 vs PC2
 # this figure is in the manuscript
-pdf("./figs/PCA_head_shape_treatment_raw.pdf", width = 8.25, height = 6)
-plot(PCA_head, pch = 19, col = classifiers$treatment, cex = 1.25, xlim=c(-.1,.15))
-ordiellipse(PCA_head, classifiers$treatment, kind="sd",conf=0.95, col = palette(),
-            draw = "polygon", alpha = 0.2, lty = 0)
-legend("topright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
-title("PCA of shape coordinates - CTRL vs treatment")
+pdf("./figs/PCA_mean_shape_treatment.pdf", width = 8.25, height = 6)
+plot(PCA_head, pch = 16, col = pal[as.numeric(classifiers$treatment)], cex = 1.25, xlim=c(-.1,.15), ylim=c(-.09,.09))
+ordiellipse(PCA_head, classifiers$treatment, kind="sd",conf=0.95, border = pal,
+            draw = "polygon", alpha = 0, lty = 1)
+legend("topright", pch = 16, col = pal, legend = levels(classifiers$treatment))
+# title("PCA of shape coordinates - ctrl vs treatment")
 dev.off()
 
-
+# create a table of PC1-4 comparisons
 # PC1 - PC4
-png("./figs/PCA_head_treatment_PC1-4.png", width = 750, height = 1200)
 pdf("./figs/PCA_head_treatment_PC1-4.pdf", width = 8, height = 12)
-par(mfrow=c(3,2))
-plot(PCA_head, pch = 19, axis1 = 1, axis2 = 2, col = classifiers$treatment, cex = 1.25)
-ordiellipse(PCA_head, classifiers$treatment, kind="sd",conf=0.95, col = palette(),
-            draw = "polygon", alpha = 0.2, lty = 0)
-legend("topright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
-title("PC1 ~ PC2")
-
-plot(PCA_head, pch = 19, axis1 = 1, axis2 = 3, col = classifiers$treatment, cex = 1.25)
-ordiellipse(PCA_head$x[,c(1,3)], classifiers$treatment, kind="sd",conf=0.95, col = palette(),
-            draw = "polygon", alpha = 0.2, lty = 0)
-legend("topright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
-title("PC1 ~ PC3")
-
-plot(PCA_head, pch = 19, axis1 = 1, axis2 = 4, col = classifiers$treatment, cex = 1.25)
-ordiellipse(PCA_head$x[,c(1, 4)], classifiers$treatment, kind="sd",conf=0.95, col = palette(),
-            draw = "polygon", alpha = 0.2, lty = 0)
-legend("topright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
-title("PC1 ~ PC4")
-
-plot(PCA_head, pch = 19, axis1 = 2, axis2 = 3, col = classifiers$treatment, cex = 1.25)
-ordiellipse(PCA_head$x[,c(2,3)], classifiers$treatment, kind="sd",conf=0.95, col = palette(),
-            draw = "polygon", alpha = 0.2, lty = 0)
-legend("bottomleft", pch = 19, col = palette(), legend = levels(classifiers$treatment))
-title("PC2 ~ PC3")
-
-plot(PCA_head, pch = 19, axis1 = 2, axis2 = 4, col = classifiers$treatment, cex = 1.25)
-ordiellipse(PCA_head$x[,c(2,4)], classifiers$treatment, kind="sd",conf=0.95, col = palette(),
-            draw = "polygon", alpha = 0.2, lty = 0)
-legend("topright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
-title("PC2 ~ PC4")
-
-plot(PCA_head, pch = 19, axis1 = 3, axis2 = 4, col = classifiers$treatment, cex = 1.25)
-ordiellipse(PCA_head$x[,3:4], classifiers$treatment, kind="sd",conf=0.95, col = palette(),
-            draw = "polygon", alpha = 0.2, lty = 0)
-legend("topright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
-title("PC3 ~ PC4")
-
+pc_table <- plot_pc_table(PCA_head, classifiers)
 dev.off()
 
-par(mfrow=c(1,1))
-
+# plot a scree plot
 PCA_comp <- PCA_head
 class(PCA_comp) <- "princomp"
 
-png("./figs/PCA_head_shape_scree_plot.png", width = 300, height = 300)
 pdf("./figs/PCA_head_shape_scree_plot.pdf", height = 5, width = 5)
 pca_scree <- fviz_eig(PCA_comp, addlabels=TRUE, hjust = -0.3,
                       barfill="darkgrey", barcolor ="black",
                       linecolor ="blue") + ylim(0, 85) + 
   theme_classic()
-
 print(pca_scree)
 dev.off()
 
-#### 5. BOXPLOTS HEAD ####
 
-classifiers
-
+#### 2.4 Centroid size, Procruste's distance, allometry ####
 Pdist <- ShapeDist(GPA_head$coords, GPA_head$consensus)
 
+# make the dataframe for better ggplot plotting
 gdf_head <- geomorph.data.frame(GPA_head, treatment = classifiers$treatment, Pdist = Pdist)
-
 
 ggplot_df <- as.data.frame(cbind(as.character(gdf_head$Csize), 
                                  as.character(gdf_head$treatment), 
                                  as.character(gdf_head$Pdist)))
 colnames(ggplot_df) <- c("Csize", "treatment", "Pdist")
-
 row.names(ggplot_df) <- dimnames(gdf_head$coords)[[3]]
-
-head(ggplot_df)
 
 ggplot_df$treatment <- as.factor(ggplot_df$treatment)
 ggplot_df$Csize <- as.numeric(as.character(ggplot_df$Csize))
 ggplot_df$Pdist <- as.numeric(as.character(ggplot_df$Pdist))
 
-str(ggplot_df)
-log(ggplot_df$Csize)
-
+# plot centroid size
 pdf("./figs/Csize_boxplot_HEAD.pdf", width = 6.5, height = 6.5)
 ggplot(ggplot_df, aes(x=treatment, y=log(Csize), fill=treatment)) + 
-  geom_boxplot(alpha = 0.7) +
-  scale_fill_manual(values = c("navy", "darkorange")) +
+  geom_boxplot(alpha = 0.7, outlier.shape=NA) +
+  scale_fill_manual(values = pal) +
   geom_jitter(width = 0.1, size = 1.25) +
   theme(plot.title = element_text(size = 20, face = "bold"), axis.text.x = element_text(size = 15),
         axis.title = element_text(size = 18, face = "bold"), legend.text=element_text(size=12), 
         legend.title=element_text(size=15, face = "bold"))
 dev.off()
 
-
+# plot Procrustes' distance
 pdf("./figs/Pdist_treatment.pdf", width = 6.5, height = 6.5)
 ggplot(ggplot_df, aes(Pdist, fill = treatment)) +
-  scale_fill_manual(values=c("navy", "darkorange")) + geom_density(alpha = 0.65) + 
+  scale_fill_manual(values=pal) + geom_density(alpha = 0.25) + 
   ggtitle("Procrustes distances head shape") + xlab("Procrustes distance") + ylab("Relative density") +
   theme(plot.title = element_text(size = 15, face = "bold"), axis.text.x = element_text(size = 10),
         axis.title = element_text(size = 12, face = "bold"), legend.text=element_text(size=10), 
         legend.title=element_text(size=12, face = "bold"))
 dev.off()
 
-#### 6. ANOVAs & ALLOMETRY - HEAD ####
-
+# allometry
 allometry_all <- procD.lm(coords ~ Csize, data = gdf_head, iter = 999, RRPP = TRUE)
 summary(allometry_all)
-# Delete file if it exists
+# Save output, delete file if it exists
 if (file.exists("./output/HEAD_allometry_all.txt")) {
   file.remove("./output/HEAD_allometry_all.txt")
 }
-
 cat("Allometry (coords ~ Csize)", capture.output(summary(allometry_all)), 
     file="./output/HEAD_allometry_all.txt", sep="\n", append=TRUE)
 
 shape_residuals <- allometry_all$residuals # let's save this for later. We will run a PCA again on the residuals
 write.csv(shape_residuals, "./output/HEAD_shape_residuals.csv")
 
+# allometry by treatment
 allometry_treatment <- procD.lm(coords ~ Csize * treatment, data = gdf_head, iter = 999, RRPP = TRUE)
-summary(allometry_treatment)
-
+summary(allometry_treatment) # both significant, but no interaction between the two
 # Delete file if it exists
 if (file.exists("./output/HEAD_allometry_treatment.txt")) {
   file.remove("./output/HEAD_allometry_treatment.txt")
@@ -412,187 +444,130 @@ cat("Allometry * treatment (coords ~ Csize * treatment)", capture.output(summary
     file="./output/HEAD_allometry_treatment.txt", sep="\n", append=TRUE)
 
 
-# ANOVA treatment
+#### 2.5 Mean shape ANOVA and plots ####
+# ANOVA of mean shape - this pvalue is in manuscript
 treatment <- procD.lm(coords ~ treatment, data = gdf_head, RRPP = TRUE)
 summary(treatment)
 
-# Delete file if it exists
+# Save and delete file if it exists
 if (file.exists("./output/ANOVA_HEAD_shape_treatment.txt")) {
   file.remove("./output/ANOVA_HEAD_shape_treatment.txt")
 }
-
 cat("ANOVA shape - treatment (coords ~ treatment)", capture.output(summary(treatment)), 
     file="./output/ANOVA_HEAD_shape_treatment.txt", sep="\n", append=TRUE)
 
-
+# ANOVA of centroid size by treatment
 one_way <- aov(log(gdf_head$Csize) ~ gdf_head$treatment)
 summary(one_way)
 
-# Delete file if it exists
+# Save and delete file if it exists
 if (file.exists("./output/ANOVA_HEAD_Csize_treatment.txt")) {
   file.remove("./output/ANOVA_HEAD_Csize_treatment.txt")
 }
-
 cat("ANOVA Csize - treatment (Csize ~ treatment)", capture.output(summary(one_way)), 
     file="./output/ANOVA_HEAD_Csize_treatment.txt", sep="\n", append=TRUE)
 
-#### 7. HEATMAPS - HEAD ####
-#### 7.1. HEAD HEATMAPS group means ####
 
+#### 2.5.1 Mean shape heatmaps ####
 # load mesh of the specimen closest to the mean shape
-face_mesh <- geomorph::read.ply("./data/ATLAS_chick_ctr_23_smooth_ascii_only_face.ply") 
-# The mesh should only be surface, and be just have the frontal side here
-head_lowres <- vcgQEdecim(face_mesh, percent = 0.15)
-atlas_head_lm <- head_array[,, which(dimnames(head_array)[[3]] == "chick_ctr_23")]
+setwd('./lm_data/Meshes/')
+face_mesh <- get_dec_mesh('face')
+setwd("../../")
 
-levels(gdf_head$treatment)
+# get landmarks for each treatment group
+triple_coords <- gdf_head$coords[,,which(gdf_head$treat == "triple")]
+ctrl_coords <- gdf_head$coords[,,-which(gdf_head$treat == "triple")]
 
-who_is_MUT <- which(gdf_head$treat == "triple")
-MUT_coords <- gdf_head$coords[,,who_is_MUT]
-dim(MUT_coords)
-
-CTRL_coords <- gdf_head$coords[,,-who_is_MUT]
-dim(CTRL_coords)
-
-dim(gdf_head$coords)
 # we are going to calculate the mean shape on the shape coordinates. Everything will be in Procrustes dist.
-
-MUT_mean_shape <- mshape(MUT_coords)
-
-CTRL_mean_shape <- mshape(CTRL_coords)
-str(CTRL_mean_shape)
+triple_mean_shape <- mshape(triple_coords)
+ctrl_mean_shape <- mshape(ctrl_coords)
 
 # Create morphed meshes
-MUT_mesh <- tps3d(head_lowres, as.matrix(atlas_head_lm), MUT_mean_shape, threads = 1)
-CTRL_mesh <- tps3d(head_lowres, as.matrix(atlas_head_lm), CTRL_mean_shape, threads = 1)
+triple_mesh <- tps3d(face_mesh, as.matrix(atlas_head_lm), triple_mean_shape, threads = 1)
+ctrl_mesh <- tps3d(face_mesh, as.matrix(atlas_head_lm), ctrl_mean_shape, threads = 1)
 
-open3d(zoom=0.75, windowRect = c(0,0, 1000, 700), userMatrix = dorsal)
-# meshDist(CTRL_mesh, MUT_mesh, rampcolors = diverge_hsv(n = 3), sign = TRUE)
-meshDist(CTRL_mesh, MUT_mesh, rampcolors = c("blue", "white", "red"), sign = TRUE)
-rgl.snapshot("./figs/Heatmap_CTRL_MUT_head_dorsal.png", top = TRUE)
+# plot heatmap and setup a new reference view
+open3d(zoom = 0.75, userMatrix = frontal, windowRect = c(0, 0, 1000, 700)) 
+meshDist(ctrl_mesh, triple_mesh, rampcolors = c("blue", "white", "red"), sign = TRUE)
 
-writeWebGL(dir = "webGL", filename = file.path("./figs/Heatmap_CTRL_MUT_head.html"),
-           template = system.file(file.path("WebGL", "template.html"), package = "rgl"),
-           snapshot = TRUE, width = 1000, height = 700)
+# you need to click and move mouse around in the figure until it is en-face with
+# the window, then run the line below to save the orientation
+heatmap_frontal <- par3d()$userMatrix
+rgl::close3d()
+save(heatmap_frontal, file = "./lm_data/RGL_heat_head_pos.rdata")
 
-# set positions again
-dorsal <- par3d()$userMatrix
+load("./lm_data/RGL_heat_head_pos.rdata")
 
-rgl.close()
+# plot heatmap - this is used in manuscript
+open3d(zoom = 0.75, userMatrix = heatmap_frontal, windowRect = c(0, 0, 1000, 700)) 
+pdf("./figs/heatmap_treatment_legend.pdf", width = 2.5, height = 6.5)
+meshDist(ctrl_mesh, triple_mesh, rampcolors = c("blue", "white", "red"), sign = TRUE)
+rgl.snapshot("./figs/Heatmap_treatment.png", top = TRUE) # this one captures 3d output
+rgl::close3d() # this one captures teh heatmap legend as pdf
+dev.off()
 
-save(dorsal, file = "./figs/RGL_head_heatmaps_pos.rdata")
+# plot the mean triple treated mesh - this is used in manuscript
+open3d(zoom=0.75, userMatrix = heatmap_frontal, windowRect = c(0,0,1000,700)) 
+shade3d(triple_mesh, color="gray", alpha=1, specular='black')
+rgl.snapshot("./figs/mean_shape_triple.png", top = TRUE)
+rgl::close3d()
 
-load("./figs/RGL_head_heatmaps_pos.rdata")
+# plot the mean dmso treated mesh - this is used in manuscript
+open3d(zoom=0.75, userMatrix = heatmap_frontal, windowRect = c(0,0,1000,700)) 
+shade3d(ctrl_mesh, color="gray", alpha=1, specular='black')
+rgl.snapshot("./figs/mean_shape_ctrl.png", top = TRUE)
+rgl::close3d()
 
+#Create page with triple vs ctrl morphs & heatmaps
+Morph_ctrl <- image_read(paste0("./figs/mean_shape_ctrl.png"))
+Morph_triple <- image_read(paste0("./figs/mean_shape_triple.png"))
+Heatmap <- image_read(paste0("./figs/Heatmap_treatment.png"))
 
-open3d(zoom=0.75, userMatrix = dorsal, windowRect = c(0,0,1000,700)) 
-shade3d(MUT_mesh, color="gray", alpha=0.9)
-rgl.snapshot("./figs/Morph_MUT_dorsal_head.png", top = TRUE)
-writePLY("./output/MUT_mesh.ply")
-rgl.close()
+Morph_ctrl <- image_annotate(Morph_ctrl, "control", font = "times", location = "+400+20", size = 100)
+Morph_triple <- image_annotate(Morph_triple, "triple", font = "times", location = "+425+20", size = 100)
+Heatmap <- image_annotate(Heatmap, "heatmap", font = "times", location = "+350+20", size = 100)
 
-
-open3d(zoom=0.75, userMatrix = dorsal, windowRect = c(0,0,1000,700)) 
-shade3d(CTRL_mesh, color="gray", alpha=0.9)
-rgl.snapshot("./figs/Morph_CTRL_dorsal_head.png", top = TRUE)
-writePLY("./output/CTRL_mesh.ply")
-rgl.close()
-
-
-
-#Create page with MUT vs CTRL morphs & heatmaps
-# dorsal
-Morph_CTRL_dorsal <- image_read(paste0("./figs/Morph_CTRL_dorsal_head.png"))
-Morph_MUT_dorsal <- image_read(paste0("./figs/Morph_MUT_dorsal_head.png"))
-Heatmap_dorsal <- image_read(paste0("./figs/Heatmap_CTRL_MUT_head_dorsal.png"))
-
-Morph_CTRL_dorsal <- image_annotate(Morph_CTRL_dorsal, "CTRL", font = "times", location = "+400+20", size = 100)
-Morph_MUT_dorsal <- image_annotate(Morph_MUT_dorsal, "MUT", font = "times", location = "+425+20", size = 100)
-Heatmap_dorsal <- image_annotate(Heatmap_dorsal, "Heatmap", font = "times", location = "+350+20", size = 100)
-
-
-
-
-stack_img <- image_append(image_scale(c(Morph_CTRL_dorsal, Morph_MUT_dorsal, Heatmap_dorsal), "x200"), stack = TRUE)
-
+stack_img <- image_append(image_scale(c(Morph_ctrl, Morph_triple, Heatmap), "x200"), stack = TRUE)
 image_browse(stack_img)
+image_write(stack_img, path = paste0("./figs/ctrl_triple_morphs_heatmaps.png"), format = "png")
 
-image_write(stack_img, path = paste0("./figs/CTRL_MUT_morphs_heatmaps_head.png"), format = "png")
 
-
-####7.2. HEATMAPS - PC1-10 ####
+#### 2.5.2 Heatmaps - PC1-10 ####
+# load mesh of the specimen closest to the mean shape
+setwd('./lm_data/Meshes/')
+face_mesh <- get_dec_mesh('face')
+setwd("../../")
 
 PC_min <- tps3d(face_mesh, as.matrix(atlas_head_lm), PCA_head$shapes[[1]]$min, threads = 1)
-open3d(zoom=0.75, userMatrix = dorsal, windowRect= c(0,0,1000,700))
-shade3d(PC_min, color="grey")
+open3d(zoom=0.75, userMatrix = heatmap_frontal, windowRect= c(0,0,1000,700))
+shade3d(PC_min, color="grey", specular='black')
+rgl::close3d()
 
 PC_max <- tps3d(face_mesh, as.matrix(atlas_head_lm), PCA_head$shapes[[1]]$max, threads = 1)
-open3d(zoom=0.75, userMatrix = dorsal, windowRect= c(0,0,1000,700))
-shade3d(PC_max, color="grey")
-
+open3d(zoom=0.75, userMatrix = heatmap_frontal, windowRect= c(0,0,1000,700))
+shade3d(PC_max, color="grey", specular='black')
+rgl::close3d()
 
 # Have a look at the heatmap, and change colour if needed
-open3d(zoom=0.75, userMatrix = dorsal, windowRect= c(0,0,1000,700))
+open3d(zoom=0.75, userMatrix = heatmap_frontal, windowRect= c(0,0,1000,700))
 x11(width=1.7, height=8)
 meshDist(PC_max, PC_min, rampcolors = c("blue", "white", "red"), sign = FALSE)
+rgl::close3d()
 
-summary(PCA_head)
+# create all the min and max heatmaps for pc1 to n_dimensions
 n_dimensions <- 10 # number of PCs to include in the figure, decide depending on % of variance explained in PCs
-
-# This loop automatically positions faces in dorsal only for the 10 PCs
-for (i in 1:n_dimensions){
-  PC_min <- tps3d(head_lowres, as.matrix(atlas_head_lm), PCA_head$shapes[[i]]$min, threads = 1)
-  PC_max <- tps3d(head_lowres, as.matrix(atlas_head_lm), PCA_head$shapes[[i]]$max, threads = 1)
-  PC <- paste0("PC", i)
-  
-  #dorsal views
-  open3d(zoom=0.75, userMatrix = dorsal, windowRect= c(0,0,1000,700))
-  shade3d(PC_max, color="grey")
-  rgl.snapshot(paste0("./figs/pc_morphs/head/",PC,"_","max_dorsal.png"), top = TRUE )
-  clear3d()
-  rgl.close()
-  
-  
-  #dorsal views
-  open3d(zoom=0.75, userMatrix = dorsal, windowRect= c(0,0,1000,700))
-  shade3d(PC_min, color="grey")
-  rgl.snapshot(paste0("./figs/pc_morphs/head/",PC,"_","min_dorsal.png"), top = TRUE )
-  clear3d()
-  rgl.close()
-  
-  
-  #Heatmaps
-  open3d(zoom=0.75, userMatrix = dorsal, windowRect= c(0,0,1000,700))
-  x11(width=1.7, height=8)
-  meshDist(PC_min, PC_max, rampcolors = c("darkblue", "blue", "white", "red", "darkred"), sign = TRUE)
-  rgl.snapshot(paste0("./figs/pc_morphs/head/heat_",PC,"_","dorsal.png"), top = TRUE)
-  # dev.copy(pdf, paste0("./figs/pc_morphs/head/heat_",PC,"_scale.pdf"), width=2, height=9.5)
-  dev.print(pdf, paste0("./figs/pc_morphs/head/heat_",PC,"_scale.pdf"), width=2, height=9.5)
-  dev.off()
-  clear3d()
-  rgl.close()
-  
-  rm(PC_max, PC_min, PC) 
-}
-#END LOOP
-
-
-
-
+plot_pc_heatmap(face_mesh, atlas_head_lm, PCA_head, n_dimensions)
 
 #Create page with PCs
 i <- 1
-PC_min_img_sup <- image_read(paste0("./figs/pc_morphs/head/PC",i,"_min_dorsal.png"))
-PC_max_img_sup <- image_read(paste0("./figs/pc_morphs/head/PC",i,"_max_dorsal.png"))
-PC_HT_img_sup <- image_read(paste0("./figs/pc_morphs/head/heat_PC",i,"_dorsal.png"))
-
+PC_min_img_sup <- image_read(paste0("./figs/pc_morphs/PC",i,"_min.png"))
+PC_max_img_sup <- image_read(paste0("./figs/pc_morphs/PC",i,"_max.png"))
+PC_HT_img_sup <- image_read(paste0("./figs/pc_morphs/heat_PC",i,".png"))
 
 PC_col <- c(PC_min_img_sup,PC_max_img_sup,PC_HT_img_sup)
 
 imgs <- image_append(image_scale(PC_col, "x200"), stack = TRUE)
-# imgs <- image_border(imgs, "white", "0x15")
-# imgs <- image_annotate(imgs, paste0("PC",i), font = "Times",
-#                        location = "+100+0", size = 60)
+
 imgs <- image_border(imgs, "white", "85x15")
 imgs <- image_annotate(imgs, paste0("PC",i), font = "Times",
                        location = "+195+0", size = 60)
@@ -603,13 +578,10 @@ imgs <- image_annotate(imgs, paste0("PCmax"), font = "Times",
 imgs <- image_annotate(imgs, paste0("Heatmap"), font = "Times",
                        location = "+0+495", size = 32)
 
-
-image_browse(imgs)
-
 for (i in 2:n_dimensions){
-  PC_min_img_sup <- image_read(paste0("./figs/pc_morphs/head/PC",i,"_min_dorsal.png"))
-  PC_max_img_sup <- image_read(paste0("./figs/pc_morphs/head/PC",i,"_max_dorsal.png"))
-  PC_HT_img_sup <- image_read(paste0("./figs/pc_morphs/head/heat_PC",i,"_dorsal.png"))
+  PC_min_img_sup <- image_read(paste0("./figs/pc_morphs/PC",i,"_min.png"))
+  PC_max_img_sup <- image_read(paste0("./figs/pc_morphs/PC",i,"_max.png"))
+  PC_HT_img_sup <- image_read(paste0("./figs/pc_morphs/heat_PC",i,".png"))
   
   
   PC_row <- c(PC_min_img_sup,PC_max_img_sup,PC_HT_img_sup)
@@ -622,10 +594,4 @@ for (i in 2:n_dimensions){
   
   imgs <-image_append(image_scale(imgs))
 }
-
-i
-
-image_browse(imgs)
-image_write(imgs, path = paste0("./figs/pc_morphs/head_SHAPE_heatmap_morphs_PC1-", i, ".png"), format = "png")
-
-# We are done with these analyses
+image_write(imgs, path = paste0("./figs/mean_treatment_heatmap_morphs_PC1-", i, ".png"), format = "png")
