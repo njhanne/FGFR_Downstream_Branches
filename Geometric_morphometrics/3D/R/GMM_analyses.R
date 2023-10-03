@@ -1,4 +1,4 @@
-#### 0. Load R packages ####
+#### Load R packages ####
 # install.packages('devtools')
 # library(devtools)
 # install_github("marta-vidalgarcia/morpho.tools.GM", force = TRUE)
@@ -7,19 +7,17 @@
 library(rgl)
 library(geomorph)
 library(morpho.tools.GM)
-# install_github("marta-vidalgarcia/mesh_process")
-# library(mesh_process)
 library(Morpho)
 library(Rvcg)
 library(magick)
 library(Evomorph)
 library(ggplot2)
 library(vegan)
-# install_github("vqv/ggbiplot")
 library(ggbiplot)
 library(factoextra)
 library(gt)
 library(abind)
+
 
 #### 0 Helpers ####
 #### 0.1 Landmark loading helpers ####
@@ -595,3 +593,5 @@ for (i in 2:n_dimensions){
   imgs <-image_append(image_scale(imgs))
 }
 image_write(imgs, path = paste0("./figs/mean_treatment_heatmap_morphs_PC1-", i, ".png"), format = "png")
+
+# this analysis continues in the 'Asymmetry.R' script

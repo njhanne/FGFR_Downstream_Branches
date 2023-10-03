@@ -79,7 +79,7 @@ gpa_ggplot_df <- function(gpa_in, classifiers, pdist) {
 
 #### 0.3 Plot helpers ####
 define_pal <- function() {
-  return(c('lightgrey', '#d55c00', '#0072b2','#009e74', '#cc79a7'))
+  return(c('#bbbbbb', '#0177bb', '#13783d','#989936', '#882256'))
 }
 
 
