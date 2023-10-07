@@ -1,13 +1,16 @@
-#### 0. Load R packages ####
+#### Load R packages ####
+# install.packages('devtools')
+# library(devtools)
+# install_github("marta-vidalgarcia/morpho.tools.GM", force = TRUE)
+# install_github("marta-vidalgarcia/symmetry")
+# install.packages(c('rgl', 'geomorph' 'devtools', 'Morpho', 'Rvcg', 'magick', 'Evomorph', 'ggplot2', 'vegan', 'factoextra', 'gt'))
+
 library(rgl)
 library(geomorph)
-library(devtools)
-# install_github("marta-vidalgarcia/morpho.tools.GM", force = TRUE)
 library(morpho.tools.GM)
-# install_github("marta-vidalgarcia/symmetry")
 library(symmetry)
 # install_github("marta-vidalgarcia/mesh_process")
-library(mesh_process)
+# library(mesh_process)
 library(Morpho)
 library(Rvcg)
 library(magick)
@@ -15,118 +18,119 @@ library(Evomorph)
 library(ggplot2)
 library(vegan)
 # install_github("vqv/ggbiplot")
-library(ggbiplot)
+# library(ggbiplot)
 library(factoextra)
 library(gt)
 library(abind)
 
-#### 1. QUESTIONS ASYMMETRY ####
 
-# 1. Determine how much of the shape variance is explained by the asymmetric component
-# Use Morpho's GPA instead of geomorph's
+#### 0 Helpers ####
+
+#### 0.2 Mesh and 3D plot helpers ####
+get_dec_mesh <- function(mesh='face') {
+  if (mesh == 'head'){
+    if (file.exists('chick_ctr_1_decimated.ply')) {
+      decimated_mesh <- vcgImport("chick_ctr_1_decimated.ply")
+    } else {
+      full_mesh <- vcgImport("chick_ctr_1.ply") # load 3d mesh of contol embryo
+      decimated_mesh <- vcgQEdecim(full_mesh, percent = 0.15) # decimate mesh to reduce complexity
+      decimated_mesh <- vcgQEdecim(decimated_mesh, percent = 0.25)
+      vcgPlyWrite(decimated_mesh, 'chick_ctr_1_decimated.ply')
+    }
+  } else {
+    if (file.exists('ATLAS_chick_ctr_face_decimated.ply')) {
+      decimated_mesh <- vcgImport("ATLAS_chick_ctr_face_decimated.ply")
+    } else {
+      full_mesh <- vcgImport("ATLAS_chick_ctr_face.ply")
+      decimated_mesh <- vcgQEdecim(full_mesh, percent = 0.15)
+      vcgPlyWrite(decimated_mesh, 'ATLAS_chick_ctr_face_decimated.ply')
+    }
+  }
+  return(decimated_mesh)
+}
 
 
-# 2. Look at fluctuating asymmetry vs directional asymmetry
+get_palette <- function(lights=FALSE) {
+  if (lights) {
+    return(c('#dddddd', '#ebdadd', "#bbbbbb", "#882256"))
+  } else {
+    return(c("#bbbbbb", "#882256"))
+  }
+}
 
-# Questions 1 & 2 are going to be very straight-forward, 3 more difficult
 
-# Make plots with vector arrows (perhaps even 3*SD, to stress out differences) to see direction of shape changes on each side
+#### Main ####
+#### 1 Load data ####
+# R doesn't have a good way to get the path of where this file is located, unfortunately
+# if you are running this code in Rstudio, try this:
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+getwd() #check our working directory
+setwd("../../../data/Morphology/3D")
+getwd() #check our working directory
+# if you aren't using rstudio, use the command setwd() 
+# and point it to the data/Morphology/3D directory
 
-
-# 3. Mirror each side of the face, so double up on specs, run GMM on these new datasets, by treatment
-# We will end up with these funny-looking specimens, 4 treatments (CTRL-left, CTRL-right, MUT-left, MUT-right)
-
-#### 2. LOAD DATA ####
 # Classifiers
-setwd("/Users/nhanne/PycharmProjects/FGFR-Branches-GM")
-
-classifiers_unord  <- read.csv("./data/classifiers.csv", header = TRUE)
-head(classifiers_unord)
-tail(classifiers_unord)
-
-str(classifiers_unord)
+classifiers_unord  <- read.csv("./lm_data/classifiers.csv", header = TRUE)
 classifiers_unord$treatment <- as.factor(classifiers_unord$treatment)
 row.names(classifiers_unord) <- classifiers_unord$id
-classifiers_unord
 
 # Landmark array & GPA
-head_array <- readRDS("./data/Head_LM_array_FGF_embryos.rds")
-GPA_geomorph <- readRDS("./data/GPA_FGF_embryos.rds")
+head_array <- readRDS("./lm_data/Head_LM_array_FGF_embryos.rds")
+GPA_geomorph <- readRDS("./lm_data/GPA_FGF_embryos.rds")
 
 classifiers <- classifiers_unord[match(dimnames(head_array)[[3]], row.names(classifiers_unord)),]
 
 # Curveslide
-curveslide_all <- read.csv("./data/curveslide.csv")
+curveslide_all <- read.csv("./lm_data/curveslide.csv")
 
 # Head surface
 head_surface.lm <- c(34:51)
 
-# Atlases
-head_mesh <- geomorph::read.ply("./data/ATLAS_chick_ctr_23_smooth_ascii_no_back.ply") # Not sure what is wrong with this mesh
-head_lowres <- vcgQEdecim(head_mesh, percent = 0.15)
-
-atlas_head_lm <- head_array[,, which(dimnames(head_array)[[3]] == "chick_ctr_23")]
-
-
-
-# FIND LANDMARK PAIRS
-?detect.symmetry
-detect.symmetry(head_array[1:12,,], sym.plane = "yz", plot = TRUE)
-detect.symmetry(head_array[1:33,,], sym.plane = "yz", plot = TRUE)
-detect.symmetry(head_array[,,], sym.plane = "yz", plot = TRUE)
-
-
+# Find landmark pairs across midline
 non.sym <- c(9, 10, 13:15)
 side.1 <- c(2,4, 6, 8, 12, 16:24, 34:42)
 side.2 <- c(1, 3, 5, 7, 11, 25:33, 43:51)
 
 pairedLM <- cbind(side.1, side.2)
 
-pairedLM
+# Atlases
+setwd('./lm_data/Meshes/')
+head_lowres <- head_mesh_spec1_dec <- get_dec_mesh('face')
+setwd("../../")
 
-#### 3. ALL - ANALYSIS OF BILATERAL SYMMETRY ####
+atlas_head_lm <- head_array[,, which(dimnames(head_array)[[3]] == "chick_ctr_23")]
 
+# plot landmarks 
+open3d(zoom = 0.75, windowRect = c(0, 0, 700, 700)) 
+rgl::shade3d(head_lowres, color = "gray", alpha =0.9)
+rgl::plot3d(atlas_head_lm, aspect = "iso", type = "s", size=1.2, col = "darkblue", add = T)
+rgl::text3d(x = atlas_head_lm[,1],
+            y = atlas_head_lm[,2],
+            z = atlas_head_lm[,3],
+            texts = c(1:dim(atlas_head_lm)[1]),
+            cex = 1.5, offset = 0.5, pos = 1)
+rgl::close3d()
+
+
+#### 3 Analysis of bilateral symmetry ####
 SYM_FGF <- bilat.symmetry(head_array, side = NULL, replicate = NULL, object.sym = TRUE, 
-                          ind = dimnames(head_array )[[3]], land.pairs = pairedLM, iter = 999, seed = NULL, RRPP = TRUE)
+                          ind = dimnames(head_array)[[3]], land.pairs = pairedLM, iter = 999, seed = NULL, RRPP = TRUE)
 
 summary(SYM_FGF)
 cat("SYM_FGF", capture.output(summary(SYM_FGF)), 
     file="./output/SYM_FGF.txt", sep="\n", append=TRUE)
 
-SYM_FGF$symm.shape
 
-str(SYM_FGF$FA.component)
-str(SYM_FGF$DA.component)
-
-
-#### 3.1. SYMMETRIC COMPONENT ####
-
+#### 3.1. Symmetric component ####
 PCA_SYM_FGF <- gm.prcomp(SYM_FGF$symm.shape)
-classifiers$treatment
-palette(c("navy", "darkorange"))
+pal <- get_palette()
 
-png("./figs/PCA_symmetric_component_FGF.png", width = 750, height = 600)
-plot(PCA_SYM_FGF, pch = 19, col = classifiers$treatment, cex = 1.25)
-ordiellipse(PCA_SYM_FGF, classifiers$treatment, kind="sd",conf=0.95, col = palette(),
-            draw = "polygon", alpha = 0.2, lty = 0)
-legend("bottomleft", pch = 19, col = palette(), legend = levels(classifiers$treatment))
-title("PCA FGF SYMMETRIC COMPONENT")
-dev.off()
-
-pdf("./figs/PCA_symmetric_component_FGF.pdf", width = 7.5, height = 6)
-plot(PCA_SYM_FGF, pch = 19, col = classifiers$treatment, cex = 1.25)
-ordiellipse(PCA_SYM_FGF, classifiers$treatment, kind="sd",conf=0.95, col = palette(),
-            draw = "polygon", alpha = 0.2, lty = 0)
-legend("bottomleft", pch = 19, col = palette(), legend = levels(classifiers$treatment))
-title("PCA FGF SYMMETRIC COMPONENT")
-dev.off()
-
-svg("./figs/PCA_symmetric_component_FGF.svg", width = 7.5, height = 6)
-plot(PCA_SYM_FGF, pch = 19, col = classifiers$treatment, cex = 1.25)
-ordiellipse(PCA_SYM_FGF, classifiers$treatment, kind="sd",conf=0.95, col = palette(),
-            draw = "polygon", alpha = 0.2, lty = 0)
-legend("bottomleft", pch = 19, col = palette(), legend = levels(classifiers$treatment))
-title("PCA FGF SYMMETRIC COMPONENT")
+pdf("./figs/PCA_symmetric_component.pdf", width = 7.5, height = 6)
+plot(PCA_SYM_FGF, pch = 16, col = pal[as.numeric(classifiers$treatment)], cex = 1.25, xlim=c(-.12,.1))
+ordiellipse(PCA_SYM_FGF, classifiers$treatment, kind="sd",conf=0.95, border = pal,
+            draw = "polygon", alpha = 0, lty = 1)
+legend("bottomleft", pch = 16, col = pal, legend = levels(classifiers$treatment))
 dev.off()
 
 # this gives pvalue used in manuscript for symmetric shape change
@@ -136,36 +140,17 @@ summary(ANOVA_ALL_sym)
 cat("ANOVA_SYM_FGF", capture.output(summary(ANOVA_ALL_sym)), 
     file="./output/ANOVA_symmetric_component_FGF.txt", sep="\n", append=TRUE)
 
-### 3.2. ASYMMETRIC COMPONENT ####
 
+### 3.2. Asymmetric component ####
 PCA_ASYM_FGF <- gm.prcomp(SYM_FGF$asymm.shape)
-classifiers$treatment
-palette()
-png("./figs/PCA_asymmetric_component_FGF.png", width = 750, height = 600)
-plot(PCA_ASYM_FGF, pch = 19, col = classifiers$treatment, cex = 1.25)
-ordiellipse(PCA_ASYM_FGF, classifiers$treatment, kind="sd",conf=0.95, col = palette(),
-            draw = "polygon", alpha = 0.2, lty = 0)
-legend("topright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
-title("PCA FGF ASYMMETRIC COMPONENT")
-dev.off()
 
-pdf("./figs/PCA_asymmetric_component_FGF.pdf", width = 7.5, height = 6)
-plot(PCA_ASYM_FGF, pch = 19, col = classifiers$treatment, cex = 1.25)
-ordiellipse(PCA_ASYM_FGF, classifiers$treatment, kind="sd",conf=0.95, col = palette(),
-            draw = "polygon", alpha = 0.2, lty = 0)
-legend("topright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
-title("PCA FGF ASYMMETRIC COMPONENT")
+# this figure is used in manuscript
+pdf("./figs/PCA_asymmetric_component.pdf", width = 7.5, height = 6)
+plot(PCA_ASYM_FGF, pch = 16, col = pal[as.numeric(classifiers$treatment)], cex = 1.25)
+ordiellipse(PCA_ASYM_FGF, classifiers$treatment, kind="sd",conf=0.95, border = pal,
+            draw = "polygon", alpha = 0, lty = 1)
+legend("topright", pch = 16, col = pal, legend = levels(classifiers$treatment))
 dev.off()
-
-svg("./figs/PCA_asymmetric_component_FGF.svg", width = 7.5, height = 6)
-plot(PCA_ASYM_FGF, pch = 19, col = classifiers$treatment, cex = 1.25)
-ordiellipse(PCA_ASYM_FGF, classifiers$treatment, kind="sd",conf=0.95, col = palette(),
-            draw = "polygon", alpha = 0.2, lty = 0)
-legend("topright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
-title("PCA FGF ASYMMETRIC COMPONENT")
-dev.off()
-
-identify(x = PCA_ASYM_FGF$x[,1], y = PCA_ASYM_FGF$x[,2], labels=row.names(PCA_ASYM_FGF$x))
 
 # this is pvalue used in manuscript or asymmetry
 ANOVA_ASYM_FGF  <- procD.lm(SYM_FGF$asymm.shape ~ classifiers$treatment, 
@@ -175,35 +160,15 @@ cat("ANOVA_ASYM_FGF", capture.output(summary(ANOVA_ASYM_FGF)),
     file="./output/ANOVA_asymmetric_component_FGF.txt", sep="\n", append=TRUE)
 
 
-#### 3.3. FLUCTUATING ASYMMETRY COMPONENT ####
+#### 3.3. Fluctuating asymmetry component ####
 PCA_FA_FGF <- gm.prcomp(gpagen(SYM_FGF$FA.component)$coords)
-classifiers$treatment
-palette()
-png("./figs/PCA_fluctuating_asymmetry_component_FGF.png", width = 750, height = 600)
-plot(PCA_FA_FGF, pch = 19, col = classifiers$treatment, cex = 1.25)
-ordiellipse(PCA_FA_FGF, classifiers$treatment, kind="sd",conf=0.95, col = palette(),
-            draw = "polygon", alpha = 0.2, lty = 0)
-legend("topright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
-title("PCA FGF FLUCTUATING ASYMMETRY COMPONENT")
-dev.off()
 
-pdf("./figs/PCA_fluctuating_asymmetry_component_FGF.pdf", width = 7.5, height = 6)
-plot(PCA_FA_FGF, pch = 19, col = classifiers$treatment, cex = 1.25)
-ordiellipse(PCA_FA_FGF, classifiers$treatment, kind="sd",conf=0.95, col = palette(),
-            draw = "polygon", alpha = 0.2, lty = 0)
-legend("topright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
-title("PCA FGF FLUCTUATING ASYMMETRY COMPONENT")
+pdf("./figs/PCA_fluctuating_asymmetry_component.pdf", width = 7.5, height = 6)
+plot(PCA_FA_FGF, pch = 16, col = pal[as.numeric(classifiers$treatment)], cex = 1.25)
+ordiellipse(PCA_FA_FGF, classifiers$treatment, kind="sd",conf=0.95, border = pal,
+            draw = "polygon", alpha = 0, lty = 1)
+legend("topright", pch = 16, col = pal, legend = levels(classifiers$treatment))
 dev.off()
-
-svg("./figs/PCA_fluctuating_asymmetry_component_FGF.svg", width = 7.5, height = 6)
-plot(PCA_FA_FGF, pch = 19, col = classifiers$treatment, cex = 1.25)
-ordiellipse(PCA_FA_FGF, classifiers$treatment, kind="sd",conf=0.95, col = palette(),
-            draw = "polygon", alpha = 0.2, lty = 0)
-legend("topright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
-title("PCA FGF FLUCTUATING ASYMMETRY COMPONENT")
-dev.off()
-
-# identify(x = PCA_FA_FGF$x[,1], y = PCA_FA_FGF$x[,2], labels=row.names(PCA_FA_FGF$x))
 
 # this is the floating asymmetry pvalue
 ANOVA_FA_FGF  <- procD.lm(SYM_FGF$FA.component ~ classifiers$treatment, 
@@ -211,6 +176,7 @@ ANOVA_FA_FGF  <- procD.lm(SYM_FGF$FA.component ~ classifiers$treatment,
 summary(ANOVA_FA_FGF)
 cat("ANOVA_FA_FGF", capture.output(summary(ANOVA_ASYM_FGF)), 
     file="./output/ANOVA_Fluctuating_Asymmetry_FGF.txt", sep="\n", append=TRUE)
+
 
 #### 3.4. DIRECTIONAL ASYMMETRY COMPONENT ####
 summary(SYM_FGF)
@@ -235,73 +201,12 @@ summary(ANOVA_DA_FGF)
 
 
 
-#### 4. MIRRORING ####
-
+#### 4 Mirrored faces ####
 # Mirror each side of the face, so double up on specs, run GMM on these new datasets, by treatment
-# We will end up with these funny-looking specimens, 4 treatments (CTRL-left, CTRL-right, MUT-left, MUT-right)
+# We will end up with these funny-looking specimens, 4 treat-side combos:
+# (CTRL-contralateral, CTRL-treated, triple-contralateral, triple-treated)
 
-
-## QUESTIONS ASYMMETRY #
-
-# Mirror each side of the face, so double up on specs, run GMM on these new datasets, by treatment
-# We will end up with these funny-looking specimens, 4 treatments (CTRL-left, CTRL-right, MUT-left, MUT-right)
-
-#### 4.1 LOAD DATA ####
-# Classifiers
-classifiers_unord  <- read.csv("./data/classifiers.csv", header = TRUE)
-head(classifiers_unord)
-tail(classifiers_unord)
-
-str(classifiers_unord)
-classifiers_unord$treatment <- as.factor(classifiers_unord$treatment)
-row.names(classifiers_unord) <- classifiers_unord$id
-classifiers_unord
-
-# Landmark array & GPA
-head_array <- readRDS("./data/Head_LM_array_FGF_embryos.rds")
-GPA_geomorph <- readRDS("./data/GPA_FGF_embryos.rds")
-
-classifiers <- classifiers_unord[match(dimnames(head_array)[[3]], row.names(classifiers_unord)),]
-
-# Curveslide
-curveslide_all <- read.csv("./data/curveslide.csv")
-
-# Head surface
-head_surface.lm <- c(34:51)
-
-# Atlases
-head_mesh <- geomorph::read.ply("./data/ATLAS_chick_ctr_23_smooth_ascii_only_face.ply") # Not sure what is wrong with this mesh
-head_lowres <- vcgQEdecim(head_mesh, percent = 0.15)
-
-atlas_head_lm <- head_array[,, which(dimnames(head_array)[[3]] == "chick_ctr_23")]
-
-
-
-# 4.2 FIND LANDMARK PAIRS ####
-# ?detect.symmetry
-# detect.symmetry(GPA_geomorph$coords, sym.plane = "yz", plot = TRUE)
-# detect.symmetry(head_array[1:33,,], sym.plane = "yz", plot = TRUE)
-# detect.symmetry(head_array[,,], sym.plane = "yz", plot = TRUE)
-
-
-non.sym <- c(9, 10, 13:15)
-side.1 <- c(2,4, 6, 8, 12, 16:24, 34:42) # LEFT
-side.2 <- c(1, 3, 5, 7, 11, 25:33, 43:51) # RIGHT
-
-
-
-open3d(zoom = 0.75, windowRect = c(0, 0, 700, 700)) 
-rgl::shade3d(head_lowres, color = "gray", alpha =0.9)
-rgl::plot3d(atlas_head_lm, aspect = "iso", type = "s", size=1.2, col = "darkblue", add = T)
-rgl::text3d(x = atlas_head_lm[,1],
-            y = atlas_head_lm[,2],
-            z = atlas_head_lm[,3],
-            texts = c(1:dim(atlas_head_lm)[1]),
-            cex = 1.5, offset = 0.5, pos = 1)
-rgl::close3d()
-
-
-# 4.3. MIRRORING LANDMARKS ####
+# 4.1 Mirroring landmarks ####
 # Mirror landmarks on both sides and generate two new arrays
 # the non-symmetrical landmarks also remain the same
 
@@ -330,24 +235,31 @@ for (i in 1:dim(head_array)[3]){
                                            MARGIN = 2, c(-1,1,1), `*`)
 }
 
-load("./data/RGL_head_pos.rdata")
+setwd('./lm_data/Meshes/')
+head_lowres <- head_mesh_spec1_dec <- get_dec_mesh('head')
+setwd("../../")
 
-dorsal <- par3d()$userMatrix
-open3d(zoom = 0.75, windowRect = c(0, 0, 1000, 700), userMatrix = dorsal) 
-plot3d(GPA_geomorph$coords[, , 1], col = "black", type = "s", aspect = "iso", 
-       size = 1, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
-plot3d(array_side1_mirrored[,,1], col = "chartreuse", type = "s", aspect = "iso", 
-       size = 0.75, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
-
-which(classifiers_mirrored$treatment == "triple")
-
-open3d(zoom = 0.75, windowRect = c(0, 0, 1000, 700), userMatrix = frontal)
-rgl::shade3d(head_mesh, color = "gray", alpha =1,specular = "black", add=T)
-plot3d(GPA_geomorph$coords[, , 27], col = "black", type = "s", aspect = "iso", 
-       size = 1, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
-plot3d(array_side1_mirrored[,,27], col = "chartreuse", type = "s", aspect = "iso", 
-       size = 0.75, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
-
+# load("./lm_data/RGL_head_pos.rdata")
+# open3d(zoom = 0.75, windowRect = c(0, 0, 1000, 700), userMatrix = frontal) 
+# plot3d(GPA_geomorph$coords[, , 1], col = "black", type = "s", aspect = "iso", 
+#        size = 1, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
+# plot3d(array_side1_mirrored[,,1], col = "chartreuse", type = "s", aspect = "iso", 
+#        size = 0.75, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
+rgl::close3d()
+# 
+# # which(classifiers_mirrored$treatment == "triple")
+# 
+# open3d(zoom = 0.75, windowRect = c(0, 0, 1000, 700), userMatrix = frontal)
+# rgl::shade3d(head_lowres, color = "gray", alpha =1,specular = "black", add=T)
+# plot3d(GPA_geomorph$coords[, , 14], col = "black", type = "s", aspect = "iso",
+#        size = 1, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
+# plot3d(array_side1_mirrored[,,14], col = "chartreuse", type = "s", aspect = "iso",
+#        size = 0.75, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
+# rgl::text3d(x = atlas_head_lm[,1],
+#             y = atlas_head_lm[,2],
+#             z = atlas_head_lm[,3],
+#             texts = c(1:dim(atlas_head_lm)[1]),
+#             cex = 1.5, offset = 0.5, pos = 1)
 
 # Change dimnames so we know which way they were mirrored
 dimnames(array_side1_mirrored)[[3]] <- paste0("contralateral_", dimnames(array_side1_mirrored)[[3]]) # this one has the contralateral side mirrored
@@ -356,8 +268,6 @@ dimnames(array_side2_mirrored)[[3]] <- paste0("treated_", dimnames(array_side2_m
 # And join both arrays
 
 mirrored_array <- abind(array_side1_mirrored, array_side2_mirrored, along = 3)
-
-dimnames(mirrored_array)[[3]]
 
 # Finally make new classifiers matrix
 
@@ -371,7 +281,7 @@ classifiers_mirrored$treatment_mirror[(1+dim(classifiers)[1]):dim(classifiers_mi
 classifiers_mirrored$treatment_mirror <- as.factor(classifiers_mirrored$treatment_mirror)
 
 
-# 4.4. GPA & PCA - both sides mirrored ####
+# 4.4. Mirrored GPA & PCA ####
 surface_semis <- c(34:51)
 GPA_mirrored_double <- geomorph::gpagen(A = mirrored_array*c(GPA_geomorph$Csize,GPA_geomorph$Csize), curves = as.matrix(curveslide_all), 
                                         surfaces = surface_semis)
@@ -381,16 +291,14 @@ GPA_mirrored_contra <- geomorph::gpagen(A = mirrored_array[,,1:dim(array_side1_m
 GPA_mirrored_treat <- geomorph::gpagen(A = mirrored_array[,,(1+dim(array_side1_mirrored)[3]):dim(mirrored_array)[3]]*GPA_geomorph$Csize, curves = as.matrix(curveslide_all), 
                                        surfaces = surface_semis)
 
-saveRDS(mirrored_array, "./data/mirrored_array_both_sides.rds")
-saveRDS(GPA_mirrored_double, "./data/mirrored_gpa_both_sides.rds")
-saveRDS(GPA_mirrored_contra, "./data/mirrored_gpa_contralateral.rds")
-saveRDS(GPA_mirrored_treat, "./data/mirrored_gpa_treated.rds")
-write.csv(classifiers_mirrored, "./data/classifiers_mirrored_both_sides.csv")
+saveRDS(mirrored_array, "./lm_data/mirrored_array_both_sides.rds")
+saveRDS(GPA_mirrored_double, "./lm_data/mirrored_gpa_both_sides.rds")
+saveRDS(GPA_mirrored_contra, "./lm_data/mirrored_gpa_contralateral.rds")
+saveRDS(GPA_mirrored_treat, "./lm_data/mirrored_gpa_treated.rds")
+write.csv(classifiers_mirrored, "./lm_data/classifiers_mirrored_both_sides.csv")
 
 # Both sides
 PCA_both_sides <- gm.prcomp(GPA_mirrored_double$coords)
-summary(PCA_both_sides)
-str(PCA_both_sides)
 
 # Delete file if it exists
 if (file.exists("./output/PCA_both_sides.txt")) {
@@ -399,26 +307,17 @@ if (file.exists("./output/PCA_both_sides.txt")) {
 cat("PCA shape variables raw - both sides mirrored", capture.output(summary(PCA_both_sides)), 
     file="./output/PCA_both_sides.txt", sep="\n", append=TRUE)
 
-
+# plot PC1vPC2
 levels(classifiers_mirrored$treatment_mirror)
-palette(c("navy", "darkorange", "cornflowerblue", "goldenrod1"))
-
-pdf("./figs/PCA_head_shape_treatment_sides.pdf", width = 8.25, height = 6)
-plot(PCA_both_sides, pch = 19, col = classifiers_mirrored$treatment_mirror, cex = 1.25)
-ordiellipse(PCA_both_sides, classifiers_mirrored$treatment_mirror, kind="ehull",conf=0.95, col = palette(),
-            draw = "polygon", alpha = 0.2, lty = 0)
-legend("bottomright", pch = 19, col = palette(), legend = levels(classifiers_mirrored$treatment_mirror))
-title("PCA of shape coordinates - mirrored side and treatment")
+pal_light <- get_palette(lights=TRUE)
+# this plot is in manuscript
+pdf("./figs/mirrored_PCA_treatment_sides.pdf", width = 8.25, height = 6)
+plot(PCA_both_sides, pch = 16, col = pal_light[as.numeric(classifiers_mirrored$treatment_mirror)], cex = 1.5)
+ordiellipse(PCA_both_sides, classifiers_mirrored$treatment_mirror, kind="ehull",conf=0.95, border = pal,
+            draw = "polygon", alpha = 0, lty = 1)
+legend("bottomright", pch = 16, col = pal_light, legend = levels(classifiers_mirrored$treatment_mirror))
 dev.off()
 
-
-png("./figs/PCA_head_shape_treatment_sides.png", width = 750, height = 600)
-plot(PCA_both_sides, pch = 19, col = classifiers_mirrored$treatment_mirror, cex = 1.25)
-ordiellipse(PCA_both_sides, classifiers_mirrored$treatment_mirror, kind="ehull",conf=0.95, col = palette(),
-            draw = "polygon", alpha = 0.2, lty = 0)
-legend("bottomright", pch = 19, col = palette(), legend = levels(classifiers_mirrored$treatment_mirror))
-title("PCA of shape coordinates - mirrored side and treatment")
-dev.off()
 
 Pdist <- ShapeDist(GPA_mirrored_double$coords, GPA_mirrored_double$consensus)
 t <- geomorph.data.frame(GPA_mirrored_double, treatment = classifiers_mirrored$treatment_mirror, Pdist = Pdist)
@@ -430,12 +329,8 @@ ANOVA_both_mirrored_pw <- pairwise(ANOVA_both_mirrored, groups = t$treatment)
 # these are pvalues used in manuscript
 summary(ANOVA_both_mirrored_pw)
 
-# 4.5. PCA Left side ####
-
+# 4.5. PCA contralateral side ####
 PCA_contra <- gm.prcomp(GPA_mirrored_contra$coords)
-summary(PCA_contra)
-str(PCA_contra)
-
 # Delete file if it exists
 if (file.exists("./output/PCA_contra.txt")) {
   file.remove("./output/PCA_contra.txt")
@@ -443,25 +338,12 @@ if (file.exists("./output/PCA_contra.txt")) {
 cat("PCA shape variables raw - contralateral side mirrored", capture.output(summary(PCA_contra)), 
     file="./output/PCA_contra.txt", sep="\n", append=TRUE)
 
-
-levels(classifiers$treatment)
-palette(c("navy", "darkorange"))
-
-pdf("./figs/PCA_head_shape_treatment_mirrored_contralateral.pdf", width = 8.25, height = 6)
-plot(PCA_contra, pch = 19, col = classifiers$treatment, cex = 1.25)
-ordiellipse(PCA_contra, classifiers$treatment, kind="ehull",conf=0.95, col = palette(),
-            draw = "polygon", alpha = 0.2, lty = 0)
-legend("bottomright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
-title("PCA of shape coordinates - mirrored contralateral side and treatment")
-dev.off()
-
-
-png("./figs/PCA_head_shape_treatment_contralateral.png", width = 750, height = 600)
-plot(PCA_contra, pch = 19, col = classifiers$treatment, cex = 1.25)
-ordiellipse(PCA_contra, classifiers$treatment, kind="ehull",conf=0.95, col = palette(),
-            draw = "polygon", alpha = 0.2, lty = 0)
-legend("bottomright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
-title("PCA of shape coordinates - mirrored contralateral side and treatment")
+pal_light_only <- pal_light[1:2]
+pdf("./figs/mirrored_PCA_contralateral_treatment.pdf", width = 8.25, height = 6)
+plot(PCA_contra, pch = 16, col = pal_light_only[as.numeric(classifiers$treatment)], cex = 2)
+ordiellipse(PCA_contra, classifiers$treatment, kind="ehull",conf=0.95, border = pal_light_only,
+            draw = "polygon", alpha = 0, lty = 1)
+legend("bottomright", pch = 16, col = pal_light_only, legend = levels(classifiers$treatment))
 dev.off()
 
 t_contra <- geomorph.data.frame(GPA_mirrored_contra, treatment = classifiers$treatment)
@@ -471,12 +353,8 @@ ANOVA_contra_mirrored  <- procD.lm(coords ~ treatment, data=t_contra,
 summary(ANOVA_contra_mirrored)
 
 
-# 4.6. Right side ####
-
+#### 4.6. PCA treated side #####
 PCA_treat <- gm.prcomp(GPA_mirrored_treat$coords)
-summary(PCA_treat)
-str(PCA_treat)
-
 # Delete file if it exists
 if (file.exists("./output/PCA_treat.txt")) {
   file.remove("./output/PCA_treat.txt")
@@ -485,24 +363,11 @@ cat("PCA shape variables raw - treated side mirrored", capture.output(summary(PC
     file="./output/PCA_treat.txt", sep="\n", append=TRUE)
 
 
-levels(classifiers$treatment)
-palette(c("cornflowerblue", "goldenrod1"))
-
-pdf("./figs/PCA_head_shape_treatment_mirrored_treated.pdf", width = 8.25, height = 6)
-plot(PCA_treat, pch = 19, col = classifiers$treatment, cex = 1.25)
-ordiellipse(PCA_treat, classifiers$treatment, kind="ehull",conf=0.95, col = palette(),
-            draw = "polygon", alpha = 0.2, lty = 0)
-legend("bottomright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
-title("PCA of shape coordinates - mirrored treated side and treatment")
-dev.off()
-
-
-png("./figs/PCA_head_shape_treatment_treated.png", width = 750, height = 600)
-plot(PCA_treat, pch = 19, col = classifiers$treatment, cex = 1.25)
-ordiellipse(PCA_treat, classifiers$treatment, kind="ehull",conf=0.95, col = palette(),
-            draw = "polygon", alpha = 0.2, lty = 0)
-legend("bottomright", pch = 19, col = palette(), legend = levels(classifiers$treatment))
-title("PCA of shape coordinates - mirrored treated side and treatment")
+pdf("./figs/mirrored_PCA_treated_treatment.pdf", width = 8.25, height = 6)
+plot(PCA_treat, pch = 16, col = pal[as.numeric(classifiers$treatment)], cex = 2)
+ordiellipse(PCA_treat, classifiers$treatment, kind="ehull",conf=0.95, border = pal,
+            draw = "polygon", alpha = 0, lty = 1)
+legend("bottomright", pch = 16, col = pal, legend = levels(classifiers$treatment))
 dev.off()
 
 t_treat <- geomorph.data.frame(GPA_mirrored_treat, treatment = classifiers$treatment)
@@ -511,44 +376,26 @@ ANOVA_treat_mirrored  <- procD.lm(coords ~ treatment, data=t_treat,
                                  iter=999, RRPP=TRUE, print.progress = FALSE)
 summary(ANOVA_treat_mirrored)
 
-# 4.7. Procrustes distance ####
 
-
+#### 4.7. Procrustes distance ####
 Pdist <- ShapeDist(GPA_mirrored_double$coords, GPA_mirrored_double$consensus)
 
 gdf_mirrored <- geomorph.data.frame(GPA_mirrored_double, 
                                 treatment = classifiers_mirrored$treatment, 
                                 treatment_mirror = classifiers_mirrored$treatment_mirror, 
                                 Pdist = Pdist)
-
 ggplot_df <- as.data.frame(cbind(as.character(gdf_mirrored$treatment_mirror), 
                                  as.character(gdf_mirrored$treatment), 
                                  as.character(gdf_mirrored$Pdist)))
 colnames(ggplot_df) <- c("treatment_mirror", "treatment", "Pdist")
-
 row.names(ggplot_df) <- dimnames(gdf_mirrored$coords)[[3]]
-
-head(ggplot_df)
-
 ggplot_df$treatment <- as.factor(ggplot_df$treatment)
 ggplot_df$treatment_mirror <- as.factor(ggplot_df$treatment_mirror)
 ggplot_df$Pdist <- as.numeric(as.character(ggplot_df$Pdist))
 
-str(ggplot_df)
-
-
-pdf("./figs/Pdist_treatment_mirrored.pdf", width = 6.5, height = 6.5)
+pdf("./figs/mirrored_Pdist_treatment.pdf", width = 6.5, height = 6.5)
 ggplot(ggplot_df, aes(Pdist, fill = treatment_mirror)) +
-  scale_fill_manual(values = c("navy", "darkorange", "cornflowerblue", "goldenrod1")) + geom_density(alpha = 0.75) + 
-  ggtitle("Procrustes distances head shape - mirrored") + xlab("Procrustes distance") + ylab("Relative density") +
-  theme(plot.title = element_text(size = 15, face = "bold"), axis.text.x = element_text(size = 10),
-        axis.title = element_text(size = 12, face = "bold"), legend.text=element_text(size=10), 
-        legend.title=element_text(size=12, face = "bold"))
-dev.off()
-
-png("./figs/Pdist_treatment_mirrored.png", width = 650, height = 650)
-ggplot(ggplot_df, aes(Pdist, fill = treatment_mirror)) +
-  scale_fill_manual(values = c("navy", "darkorange", "cornflowerblue", "goldenrod1")) + geom_density(alpha = 0.75) + 
+  scale_fill_manual(values = pal_light) + geom_density(alpha = 0.5) + 
   ggtitle("Procrustes distances head shape - mirrored") + xlab("Procrustes distance") + ylab("Relative density") +
   theme(plot.title = element_text(size = 15, face = "bold"), axis.text.x = element_text(size = 10),
         axis.title = element_text(size = 12, face = "bold"), legend.text=element_text(size=10), 
@@ -556,7 +403,7 @@ ggplot(ggplot_df, aes(Pdist, fill = treatment_mirror)) +
 dev.off()
 
 
-# 5. MORPHS MIRRORING ####
+#### 5 MORPHS MIRRORING ####
 load("./figs/RGL_head_heatmaps_pos.rdata")
 load("./data/RGL_head_pos.rdata")
 # frontal <- par3d()$userMatrix
