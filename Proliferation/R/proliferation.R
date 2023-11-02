@@ -6,6 +6,7 @@ library(ggplot2)
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 getwd() #check our working directory
 setwd("./../../data/proliferation")
+getwd() #check our working directory
 
 # Load data
 df_cellpose <- read.csv('results.csv')
@@ -33,11 +34,13 @@ by(df_cellpose, df_cellpose$treatment, function(x) t.test(x$proliferation ~ x$si
 cellpose_summarise <- summarise(group_by(df_cellpose, treatment,side), mean=mean(proliferation),sd=sd(proliferation))
 cellpose_summarise <- cellpose_summarise %>% unite('treatment_side', c('treatment', 'side'), remove=FALSE)
 
-pdf("./figs/test.pdf", width = 6.5, height = 6.5)
-p <- ggplot() + geom_bar(data = cellpose_summarise, aes(y=mean, x = side, fill=treatment_side), stat="identity") +
-  geom_jitter(data = df_cellpose, aes(x = side, y = proliferation)) +
+pdf("./figs/cellpose_pHH3.pdf", width = 7.5, height = 6)
+p <- ggplot() + geom_bar(data = cellpose_summarise, aes(y=mean, x = side), stat="identity") +
+  geom_jitter(data = df_cellpose, aes(x = side, y = proliferation), shape=16) +
   geom_errorbar(data = cellpose_summarise, aes(y=mean,x=side,ymin=mean-sd,ymax=mean+sd)) +
   facet_wrap(~ treatment)
+# file_name <- paste("cellpose_pHH3.png")
+# ggsave(filename=file_name, p, width = 15, heigh = 25, units='cm')
 print(p)
 dev.off()
 
