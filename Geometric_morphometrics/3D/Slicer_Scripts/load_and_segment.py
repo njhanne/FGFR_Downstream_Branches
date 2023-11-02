@@ -1,14 +1,18 @@
-import os
+from pathlib import Path
+
+import sys
+sys.path.append("./DirFileHelpers")
+from DirFileHelpers.find_all_files import find_all_filepaths
 
 # need to type in location of your scans. Here it would be the 'Raw_Scans' directory
 
-working_dir = r"...\FGFR-Branches_GM\Raw_Scans"
-NHDR_files = [f for f in os.listdir(working_dir) if f.endswith('.nhdr')]
+working_dir = (Path.cwd().parent.parent.parent / 'data' / 'Morphology' / '3D' / 'Raw_Scans' / 'test').resolve()
+scans_dirs, NHDR_paths = find_all_filepaths(working_dir, '.nhdr')
 
-for NHDR_file in NHDR_files:
+for NHDR_path in NHDR_paths:
     # NHDR path ## Cannot have any spaces in the path!! ##
     #NHDR_path = r"...\FGFR-Branches_GM\Raw_Scans\chick_ctr_2.nhdr"
-    NHDR_path = working_dir + "\\" + NHDR_file
+    # NHDR_path = working_dir + "\\" + NHDR_file
 
     # load volume
     loadedVolumeNode = slicer.util.loadVolume(NHDR_path)
@@ -68,7 +72,7 @@ for NHDR_file in NHDR_files:
     slicer.mrmlScene.RemoveNode(segmentEditorNode)
 
     # Save
-    subject_name = os.path.splitext(NHDR_file)[0]
+    subject_name = Path(NHDR_file)#TODO figure this out
 
     # Save labelmap
     labelmapVolumeNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLLabelMapVolumeNode')

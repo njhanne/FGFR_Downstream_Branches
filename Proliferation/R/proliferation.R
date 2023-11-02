@@ -3,6 +3,7 @@ library(tidyr)
 library(ggplot2)
 
 # Directory
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 getwd() #check our working directory
 setwd("./../../data/proliferation")
 
@@ -30,13 +31,15 @@ df_cellpose <- df_cellpose %>% filter(sample != 'U73_21')
 by(df_cellpose, df_cellpose$treatment, function(x) t.test(x$proliferation ~ x$side, paired=TRUE, data=x))
 
 cellpose_summarise <- summarise(group_by(df_cellpose, treatment,side), mean=mean(proliferation),sd=sd(proliferation))
-p <- ggplot() + geom_bar(data = cellpose_summarise, aes(y=mean, x = side), stat="identity") +
+cellpose_summarise <- cellpose_summarise %>% unite('treatment_side', c('treatment', 'side'), remove=FALSE)
+
+pdf("./figs/test.pdf", width = 6.5, height = 6.5)
+p <- ggplot() + geom_bar(data = cellpose_summarise, aes(y=mean, x = side, fill=treatment_side), stat="identity") +
   geom_jitter(data = df_cellpose, aes(x = side, y = proliferation)) +
   geom_errorbar(data = cellpose_summarise, aes(y=mean,x=side,ymin=mean-sd,ymax=mean+sd)) +
   facet_wrap(~ treatment)
-file_name <- paste("cellpose_pHH3.png")
-ggsave(filename=file_name, p, width = 15, heigh = 25, units='cm')
 print(p)
+dev.off()
 
 ### Looks like the U0126 don't have significant difference but the control side seems 'affected'
 # Will use Welch's t test as the sample sizes are different
