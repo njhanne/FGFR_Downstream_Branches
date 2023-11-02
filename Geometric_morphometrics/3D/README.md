@@ -86,9 +86,11 @@ making them faster to work with in following steps.
 The script is run inside of Slicer but is launched from the system terminal. It uses it's own python environment, not your conda env. 
 Luckily the code here doesn't need any special libraries so it will work fine.
 
+The bad news is that you need to change directory in your terminal to the location of the 'load_and_segment.py' file.
+
 On Windows:
 ``` 
-Slicer.exe --python-script "/full/path/to/FGFR_Downstream_Branches/Geometric_morphometrics/3D/Slicer_Scripts/load_and_segment.py" --no-splash --no-main-window
+& '/full/path/toSlicer.exe' --python-script "./load_and_segment.py" --no-splash --no-main-window
 ```
 On Macintosh / Linux:
 ```

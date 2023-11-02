@@ -405,7 +405,7 @@ dev.off()
 
 #### 5 MORPHS MIRRORING ####
 load("./figs/RGL_head_heatmaps_pos.rdata")
-load("./data/RGL_head_pos.rdata")
+load("./lm_data/RGL_head_pos.rdata")
 # frontal <- par3d()$userMatrix
 # 
 # rgl.close()
@@ -431,10 +431,16 @@ treat_DMSO_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatme
 contra_triple_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "contra_triple")])
 treat_triple_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "treat_triple")])
 
-atlas_head_lm <- mirrored_array[,, which(dimnames(mirrored_array)[[3]] == "contralateral_chick_ctr_23")] # used for figure
-model_head_lm <- GPA_mirrored_contra$coords[,, which(dimnames(GPA_mirrored_contra$coords)[[3]] == "contralateral_chick_ctr_23")] # used for warping mesh
+og_lm <- head_array[,, which(dimnames(head_array)[[3]] == "chick_ctr_23")]
+atlas_head_lm <- mirrored_array[,, which(dimnames(mirrored_array)[[3]] == "treated_chick_ctr_23")] # used for figure
+model_head_lm <- GPA_mirrored_contra$coords[,, which(dimnames(GPA_mirrored_contra$coords)[[3]] == "treated_chick_ctr_23")] # used for warping mesh
+
+alt_lm <- gdf_mirrored$coords[,, which(dimnames(gdf_mirrored$coords)[[3]] == "treated_chick_ctr_23")]
+
 # Create morphed meshes
-model_DMSO_mesh <- tps3d(head_lowres, as.matrix(atlas_head_lm), model_head_lm, threads = 1)
+model_DMSO_mesh <- tps3d(head_lowres, as.matrix(og_lm), atlas_head_lm, threads = 1)
+model_DMSO_mesh <- tps3d(head_lowres, as.matrix(og_lm), alt_lm, threads = 1)
+
 contra_DMSO_mesh <- tps3d(head_lowres, as.matrix(atlas_head_lm), contra_DMSO_mean_shape, threads = 1)
 treat_DMSO_mesh <- tps3d(head_lowres, as.matrix(atlas_head_lm), treat_DMSO_mean_shape, threads = 1)
 contra_triple_mesh <- tps3d(head_lowres, as.matrix(atlas_head_lm), contra_triple_mean_shape, threads = 1)
@@ -444,44 +450,40 @@ treat_triple_mesh <- tps3d(head_lowres, as.matrix(atlas_head_lm), treat_triple_m
 # Plot morphs
 open3d(zoom=0.75, windowRect = c(0,0, 1000, 700), userMatrix = frontal)
 rgl::shade3d(model_DMSO_mesh, color="gray", alpha=1, specular="black")
-rgl::plot3d(as.matrix(atlas_head_lm), col = "black", type = "s", aspect = "iso", size = 1, add = TRUE)
-box3d(tick=T)
+# rgl::plot3d(rotonto(as.matrix(og_lm), as.matrix(model_head_lm), scale=TRUE)$yrot, col = "black", type = "s", aspect = "iso", size = 1, add = TRUE)
+rgl::plot3d(atlas_head_lm[side.1,], col = "black", type = "s", aspect = "iso", size = 1, add = TRUE)
+rgl::plot3d(atlas_head_lm[non.sym,], col = "black", type = "s", aspect = "iso", size = 1, add = TRUE)
+rgl::plot3d(atlas_head_lm[side.2,], col = "red", type = "s", aspect = "iso", size = 1, add = TRUE)
+rgl::plot3d(atlas_head_lm, col = "green", type = "s", aspect = "iso", size = 1, add = TRUE)
+axes3d(tick=T)
 
-rgl.snapshot("./figs/Morph_contralateral_DMSO_frontal_head.png", top = TRUE)
+rgl.snapshot("./figs/Morph_treated_DMSO_frontal_head.png", top = TRUE)
 writePLY("./output/contralateral_DMSO_mesh.ply")
-rgl.close()
+rgl::close3d()
 
 open3d(zoom=0.75, windowRect = c(0,0, 1000, 700), userMatrix = frontal)
-rgl.pop("lights")
-light3d(specular="black")
-shade3d(contra_DMSO_mesh, color="gray", alpha=0.9)
+shade3d(contra_DMSO_mesh, color="gray", alpha=1, specular='black')
 rgl.snapshot("./figs/Morph_contralateral_DMSO_frontal_head.png", top = TRUE)
 writePLY("./output/contralateral_DMSO_mesh.ply")
-rgl.close()
+rgl::close3d()
 
 open3d(zoom=0.75, windowRect = c(0,0, 1000, 700), userMatrix = frontal)
-rgl.pop("lights")
-light3d(specular="black")
-shade3d(RIGHT_control_mesh, color="gray", alpha=0.9)
+shade3d(treat_DMSO_mesh, color="gray", alpha=1, specular='black')
 rgl.snapshot("./figs/Morph_treated_DMSO_frontal_head.png", top = TRUE)
 writePLY("./output/treated_DMSO_mesh.ply")
 rgl.close()
 
 open3d(zoom=0.75, windowRect = c(0,0, 1000, 700), userMatrix = frontal)
-rgl.pop("lights")
-light3d(specular="black")
-shade3d(LEFT_triple_mesh, color="gray", alpha=0.9)
+shade3d(contra_triple_mesh, color="gray", alpha=1, specular='black')
 rgl.snapshot("./figs/Morph_contralateral_triple_frontal_head.png", top = TRUE)
 writePLY("./output/contralateral_triple_mesh.ply")
 rgl.close()
 
 open3d(zoom=0.75, windowRect = c(0,0, 1000, 700), userMatrix = frontal)
-rgl.pop("lights")
-light3d(specular="black")
-shade3d(RIGHT_triple_mesh, color="gray", alpha=0.9)
+shade3d(treat_triple_mesh, color="gray", alpha=1, specular='black')
 rgl.snapshot("./figs/Morph_treated_triple_frontal_head.png", top = TRUE)
 writePLY("./output/treated_triple_mesh.ply")
-rgl.close()
+rgl::close3d()
 
 
 # HEATMAPS
@@ -643,9 +645,24 @@ side[side.2] <- "treated"
 side <- side[-non.sym]
 
 # Integration face all
-face_integration <- integration.test(GPA_geomorph$coords[-non.sym,,], partition.gp = side, iter = 999)
+face_integration <- integratiploon.test(GPA_geomorph$coords[-non.sym,,], partition.gp = side, iter = 999)
 summary(face_integration) # Test summary
-plot(face_integration) # PLS plot
+p<- plot(face_integration) # PLS plot
+make_ggplot(p)
+plotx <- p$plot.args$x
+ploty <- p$plot.args$y
+plot_df <- stack(plotx)
+plot_df <- plot_df %>% rename(x = values)
+plot_df <- plot_df %>% mutate(y = ploty)
+plot_df <- plot_df %>% mutate(treatment = classifiers$treatment)
+
+pdf("./figs/integration_pls.pdf", width = 7.5, height = 6)
+ggplot(plot_df, aes(x=x, y=y, color = treatment)) +
+  geom_point(shape=16) +
+  scale_fill_manual(values=get_palette(FALSE)) +
+  geom_smooth(method=lm, se=FALSE) +
+  geom_smooth(method=lm, se=FALSE,aes(group=1), color='black')
+dev.off()
 
 # Compare integration of the face between treatment and control
 face_integration_CTRL <- integration.test(GPA_geomorph$coords[-non.sym, , which(classifiers$treatment == "control")], 
