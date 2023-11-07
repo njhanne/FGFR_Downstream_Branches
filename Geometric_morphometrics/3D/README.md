@@ -98,12 +98,16 @@ On Macintosh / Linux:
 ```
 
 ## Placing landmarks
-I first place the 12 fiducial landmarks in the order shown in the figure below.
+I first place the 12 fiducial landmarks in the order shown in the figure below. Next I make a semi-curve and copy-paste in the 3rd and 4th fiducial landmark. I then move the 9th fiducial landmark so that it lies on the line drawn between the 3rd and 4th.
 
-Next I make a semi-curve and copy-paste in the 3rd and 4th fiducial landmark. I then move the 9th fiducial landmark so that it lies on the line drawn between the 3rd and 4th.
+![fiducial_landmarks](/Readme_images/Fiducial_layout.png)
 
 Next I make another semi-curve and copy-paste in the 9th and 10th fiducial landmark. In the curve settings dropdown I select 'shortest distance on surface' and constrain the model to the current volume. Then I resample the line to 5 evenly spaced landmarks.
 
+![center_resampling](/Readme_images/center_semicurve.jpg)
+
 Next I draw 4-5 points around the outside of the nasal pit and resample the line to 9 evenly spaced landmarks. Repeat for the other side of the face.
 
-The semi-landmarks are a grid of 3x3 landmarks from the nasal pit to the midline of the FNP. The 'rows' follow a similar spacing as the midline curve-semilandmarks. Repeat for the other side of the face.
+The semi-landmarks are a grid of 3x3 landmarks from the nasal pit to the midline of the FNP. The 'rows' follow a similar spacing as the midline curve-semilandmarks. Repeat for the other side of the face. The below figure shows all fiducial landmarks, the center curve semilandmarks, and the right side semilandmarks.
+
+![right-side-lms](/Readme_images/semi-landmarks.png)
