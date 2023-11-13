@@ -18,6 +18,10 @@ library(factoextra)
 library(gt)
 library(abind)
 
+library(stringr)
+library(dplyr)
+library(DescTools)
+
 
 #### 0 Helpers ####
 #### 0.1 Landmark loading helpers ####
@@ -69,7 +73,7 @@ plot_3d_LMs <- function(LMs, color) {
 
 
 get_palette <- function() {
-  return(c("#bbbbbb", "#882256"))
+  return(c('#bbbbbb', '#0177bb', '#13783d','#989936', '#882256'))
 }
 
 
@@ -161,26 +165,29 @@ getwd() #check our working directory
 # and point it to the data/Morphology/3D directory
 
 
-# Then save this script inside the R folder
-# Copy landmark data to the Prop_LMs folder
-# Copy atlases inside the data/atlas folder. We will need:
-# PLY of head, endocast & mandible. 
-# CURVESLIDE FILES for endocast, head, mandible
-# ATLAS TAG file for head, endocast, mandible
-# Copy classifiers file inside data and make sure it is a csv and there are no issues
-
-
-#### 1.1 Load LM data and classifiers ####
-classifiers_unord  <- read.csv("./lm_data/classifiers.csv", header = TRUE)
-classifiers_unord$treatment <- as.factor(classifiers_unord$treatment)
-row.names(classifiers_unord) <- classifiers_unord$id
-
-
-#### 1.2 Import landmark data ####
+#### 1.1 Import landmark data ####
 # 1. Import all fcsv files into separate arrays (all specimens for east LM set)
 # Traditional landmarks
 setwd("./lm_data/Landmarks/") # directory with all the fcsv files in it
 LMs <- fcsv2array(string_del = "_Fiducials") # cleanup filenames, from morphotools library
+
+#### 1.2 Load and match classifiers ####
+sample_names <- list.files(path = getwd(), pattern="fcsv$") # get all fiducial files
+sample_names <- str_remove(sample_names, "_Fiducials.fcsv$") # remove file extension
+classifiers_unord <- data.frame(sample_names) # make dataframe
+colnames(classifiers_unord) <- "id" # rename first column
+# pull treatment from filename
+classifiers_unord$treatment <- str_match(classifiers_unord$id, "_(.+)_")[,2] 
+# rename treatments
+classifiers_unord <- classifiers_unord %>% mutate(treatment = case_when(treatment =='ctr' ~ 'DMSO',
+                                                                        treatment =='exp' ~ 'Triple',
+                                                                        treatment =='LY' ~ 'LY294002',
+                                                                        treatment =='U0' ~ 'U0126',
+                                                                        treatment =='U73' ~ 'U73122'))
+# make treatment a factor and set level order for graphing
+classifiers_unord$treatment <- factor(classifiers_unord$treatment, levels = c('DMSO', 'U0126', 'LY294002', 'U73122', 'Triple'))
+row.names(classifiers_unord) <- classifiers_unord$id
+
 
 # match the landmark sample names to the classifiers csv
 classifiers <- classifiers_unord[match(dimnames(LMs)[[3]], row.names(classifiers_unord)),]
@@ -189,10 +196,20 @@ classifiers <- classifiers_unord[match(dimnames(LMs)[[3]], row.names(classifiers
 # Curve semilandmarks
 setwd("../Semi_Curves/")
 # finds all files with the pattern in the name
+# this can run quite slowly
 curve_semis_center <- fcsv2array(pattern = "*center*", string_del = "_center_semi-curve")
 curve_semis_L <- fcsv2array(pattern = "*_L_semi-curve*", string_del = "_L_semi-curve")
 curve_semis_R <- fcsv2array(pattern = "*_R_semi-curve*", string_del = "_R_semi-curve")
 
+# for some reason a bunch of the L and R semi-curve points are in reverse order
+# need to reverse the LY, U0, and U73 samples
+reverse_ids <- which(classifiers$treatment %in% c("LY294002", 'U0126', 'U73122'))
+# reverses the order of the 9 landmarks, but not their xyz order
+curve_semis_L_reversed <- apply(curve_semis_L, c(2,3), function (x) Rev(x, 1))
+curve_semis_R_reversed <- apply(curve_semis_R, c(2,3), function (x) Rev(x, 1))
+# rewrite the original landmarks with reversed order landmarks
+curve_semis_L[,,reverse_ids] <- curve_semis_L_reversed[,,reverse_ids]
+curve_semis_R[,,reverse_ids] <- curve_semis_R_reversed[,,reverse_ids]
 
 # Surface semilandmarks grid
 setwd("../Semi_Points/")
@@ -201,12 +218,13 @@ surf_semis_R <- fcsv2array(pattern = "*_R_semi-lm*", string_del = "_R_semi-lm")
 
 setwd("../../") # back to '3D' dir
 
+
 #### 1.3 Combine LM data ####
 # Combine all arrays into a single one, in a particular order that makes sense for our GMM
 # Centre curve
 # Delete positions #1 & #5 in curve_semis_center as they are traditional landmarks
 curve_semis_center <- curve_semis_center[-c(1,5),,]
-# combine LMs, should have an rray of 51 landmarks and 54 samples
+# combine LMs, should have an array of 51 landmarks and ?? samples
 head_array <- abind(LMs, curve_semis_center, curve_semis_L, curve_semis_R, surf_semis_L, 
                     surf_semis_R, along = 1)
 
@@ -228,7 +246,6 @@ setwd("../../")
 
 # make a 3D plot
 open3d(zoom = 0.75, windowRect = c(0, 0, 700, 700)) 
-
 # plot the decimated head mesh
 rgl::shade3d(head_mesh_spec1_dec, color = "gray", alpha =0.9)
 # plot the landmarks in blue
@@ -239,7 +256,6 @@ plot_3d_LMs(curve_semis_center, 'orange')
 plot_3d_LMs(curve_semis_R, 'orange')
 # plot the left curve in orange
 plot_3d_LMs(curve_semis_L, 'orange')
-
 rgl::close3d() # close plot
 
 
@@ -249,7 +265,7 @@ rgl::close3d() # close plot
 # semi1 slides between LM9 & semi2
 # semi2 slides between semi1 & semi3
 # semi3 slides between semi2 & LM10
-curve_c_left <- c(9, semis_center[c(1,2)])h
+curve_c_left <- c(9, semis_center[c(1,2)])
 curve_c_right <- c(semis_center[c(2,3)], 10)
 curveslide_c <- cbind(curve_c_left, semis_center, curve_c_right)
 
@@ -265,7 +281,6 @@ curve_R_left <- semis_R[c(1:(length(semis_R)-2))]
 curve_R_right <- semis_R[c(3:length(semis_R))]
 curve_R_center <- semis_R[c(2:(length(semis_R)-1))]
 curveslide_R <- cbind(curve_R_left, curve_R_center, curve_R_right)
-
 
 # all our curveslide matrices
 curveslide_list <- lapply(ls(pattern = "curveslide*"), get)
@@ -289,6 +304,14 @@ GPA_head <- geomorph::gpagen(A = head_array, curves = as.matrix(curveslide_all),
 outlier <- plotOutliers_percentile(A = GPA_head$coords, percentile = 0.99, save.plot = FALSE)
 min(outlier$All_Proc_d$`Proc. d. from mean`) # actually I got lazy & did it this easier way, same concept as above though
 row.names(outlier$All_Proc_d[which(outlier$All_Proc_d$`Proc. d. from mean` == min(outlier$All_Proc_d$`Proc. d. from mean`)),])
+
+
+test3 <- head_array[,, which(dimnames(head_array)[[3]] %in% c("chick_ctr_23", "chick_U0_2")), drop=FALSE]
+plot_test <- cbind(test2, test3)
+
+open3d(zoom = 0.75, windowRect = c(0, 0, 700, 700))
+plotAllSpecimens(A = test3, label=T)
+rgl::close3d()
 
 # save progress
 saveRDS(head_array, "./lm_data/Head_LM_array_FGF_embryos.rds")
@@ -354,7 +377,7 @@ classifiers$treatment <- as.factor(classifiers$treatment)
 # Plot PC1 vs PC2
 # this figure is in the manuscript
 pdf("./figs/PCA_mean_shape_treatment.pdf", width = 8.25, height = 6)
-plot(PCA_head, pch = 16, col = pal[as.numeric(classifiers$treatment)], cex = 1.25, xlim=c(-.1,.15), ylim=c(-.09,.09))
+plot(PCA_head, pch = 16, col = pal[as.numeric(classifiers$treatment)], cex = 1.25) #, xlim=c(-.1,.15), ylim=c(-.09,.09))
 ordiellipse(PCA_head, classifiers$treatment, kind="sd",conf=0.95, border = pal,
             draw = "polygon", alpha = 0, lty = 1)
 legend("topright", pch = 16, col = pal, legend = levels(classifiers$treatment))
