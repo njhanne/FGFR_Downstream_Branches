@@ -469,6 +469,11 @@ cat("Allometry * treatment (coords ~ Csize * treatment)", capture.output(summary
 # ANOVA of mean shape - this pvalue is in manuscript
 treatment <- procD.lm(coords ~ treatment, data = gdf_head, RRPP = TRUE)
 summary(treatment)
+summary(treatment, test.type = "var")
+
+treatment_ph <- pairwise(treatment, groups = gdf_head$treatment)
+summary(treatment_ph)
+summary(treatment_ph, test.type = "var", confidence = 0.95, stat.table = TRUE)
 
 # Save and delete file if it exists
 if (file.exists("./output/ANOVA_HEAD_shape_treatment.txt")) {
@@ -496,16 +501,19 @@ face_mesh <- get_dec_mesh('face')
 setwd("../../")
 
 # get landmarks for each treatment group
-triple_coords <- gdf_head$coords[,,which(gdf_head$treat == "triple")]
-ctrl_coords <- gdf_head$coords[,,-which(gdf_head$treat == "triple")]
+triple_coords <- gdf_head$coords[,,which(gdf_head$treat == "Triple")]
+ctrl_coords <- gdf_head$coords[,,which(gdf_head$treat == "DMSO")]
+U73_coords <- gdf_head$coords[,,which(gdf_head$treat == "U73122")]
 
 # we are going to calculate the mean shape on the shape coordinates. Everything will be in Procrustes dist.
 triple_mean_shape <- mshape(triple_coords)
 ctrl_mean_shape <- mshape(ctrl_coords)
+U73_mean_shape <- mshape(U73_coords)
 
 # Create morphed meshes
 triple_mesh <- tps3d(face_mesh, as.matrix(atlas_head_lm), triple_mean_shape, threads = 1)
 ctrl_mesh <- tps3d(face_mesh, as.matrix(atlas_head_lm), ctrl_mean_shape, threads = 1)
+U73_mesh <- tps3d(face_mesh, as.matrix(atlas_head_lm), U73_mean_shape, threads = 1)
 
 # plot heatmap and setup a new reference view
 open3d(zoom = 0.75, userMatrix = frontal, windowRect = c(0, 0, 1000, 700)) 
@@ -522,7 +530,7 @@ load("./lm_data/RGL_heat_head_pos.rdata")
 # plot heatmap - this is used in manuscript
 open3d(zoom = 0.75, userMatrix = heatmap_frontal, windowRect = c(0, 0, 1000, 700)) 
 pdf("./figs/heatmap_treatment_legend.pdf", width = 2.5, height = 6.5)
-meshDist(ctrl_mesh, triple_mesh, rampcolors = c("blue", "white", "red"), sign = TRUE)
+meshDist(ctrl_mesh, U73_mesh, rampcolors = c("blue", "white", "red"), sign = TRUE)
 rgl.snapshot("./figs/Heatmap_treatment.png", top = TRUE) # this one captures 3d output
 rgl::close3d() # this one captures teh heatmap legend as pdf
 dev.off()
