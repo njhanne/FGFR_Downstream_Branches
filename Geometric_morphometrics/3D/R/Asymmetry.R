@@ -71,11 +71,30 @@ getwd() #check our working directory
 # and point it to the data/Morphology/3D directory
 
 # Classifiers
-classifiers_unord  <- read.csv("./lm_data/classifiers.csv", header = TRUE)
-classifiers_unord$treatment <- as.factor(classifiers_unord$treatment)
+#### 1.2 Load and match classifiers ####
+setwd("./lm_data/Landmarks/")
+sample_names <- list.files(path = getwd(), pattern="fcsv$") # get all fiducial files
+sample_names <- str_remove(sample_names, "_Fiducials.fcsv$") # remove file extension
+classifiers_unord <- data.frame(sample_names) # make dataframe
+colnames(classifiers_unord) <- "id" # rename first column
+# pull treatment from filename
+classifiers_unord$treatment <- str_match(classifiers_unord$id, "_(.+)_")[,2] 
+# rename treatments
+classifiers_unord <- classifiers_unord %>% mutate(treatment = case_when(treatment =='ctr' ~ 'DMSO',
+                                                                        treatment =='exp' ~ 'Triple',
+                                                                        treatment =='LY' ~ 'LY294002',
+                                                                        treatment =='U0' ~ 'U0126',
+                                                                        treatment =='U73' ~ 'U73122'))
+# make treatment a factor and set level order for graphing
+classifiers_unord$treatment <- factor(classifiers_unord$treatment, levels = c('DMSO', 'U0126', 'LY294002', 'U73122', 'Triple'))
 row.names(classifiers_unord) <- classifiers_unord$id
 
+
+# match the landmark sample names to the classifiers csv
+classifiers <- classifiers_unord[match(dimnames(LMs)[[3]], row.names(classifiers_unord)),]
+
 # Landmark array & GPA
+setwd("../..")
 head_array <- readRDS("./lm_data/Head_LM_array_FGF_embryos.rds")
 GPA_geomorph <- readRDS("./lm_data/GPA_FGF_embryos.rds")
 
@@ -121,13 +140,26 @@ summary(SYM_FGF)
 cat("SYM_FGF", capture.output(summary(SYM_FGF)), 
     file="./output/SYM_FGF.txt", sep="\n", append=TRUE)
 
+Pdist <- ShapeDist(SYM_FGF$coords, SYM_FGF$consensus)
+
+# make the dataframe for better ggplot plotting
+gdf_head <- geomorph.data.frame(GPA_head, treatment = classifiers$treatment, Pdist = Pdist)
 
 #### 3.1. Symmetric component ####
 PCA_SYM_FGF <- gm.prcomp(SYM_FGF$symm.shape)
+
+treatment <- procD.lm(coords ~ treatment, data = gdf_head, RRPP = TRUE)
+summary(treatment)
+summary(treatment, test.type = "var")
+
+treatment_ph <- pairwise(treatment, groups = gdf_head$treatment)
+summary(treatment_ph)
+summary(treatment_ph, test.type = "var", confidence = 0.95, stat.table = TRUE)
+
 pal <- get_palette()
 
 pdf("./figs/PCA_symmetric_component.pdf", width = 7.5, height = 6)
-plot(PCA_SYM_FGF, pch = 16, col = pal[as.numeric(classifiers$treatment)], cex = 1.25, xlim=c(-.12,.1))
+plot(PCA_SYM_FGF, pch = 16, col = pal[as.numeric(classifiers$treatment)], cex = 1.25) #, xlim=c(-.12,.1))
 ordiellipse(PCA_SYM_FGF, classifiers$treatment, kind="sd",conf=0.95, border = pal,
             draw = "polygon", alpha = 0, lty = 1)
 legend("bottomleft", pch = 16, col = pal, legend = levels(classifiers$treatment))

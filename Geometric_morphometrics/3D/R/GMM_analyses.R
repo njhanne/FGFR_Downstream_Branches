@@ -153,6 +153,58 @@ plot_pc_heatmap <- function(face_mesh, atlas_head_lm, PCA_head, dimensions) {
 }
 
 
+fcsv2array2 <- function (dir = NULL, pattern = NULL, ID = NULL, string_del = NULL, 
+          save.txt = FALSE) 
+{
+  if (is.null(dir) == TRUE) {
+    path <- getwd()
+  }
+  else {
+    path <- dir
+  }
+  if (is.null(pattern) == TRUE) {
+    fcsv_list <- dir(path = path, pattern = "*.fcsv")
+  }
+  else {
+    fcsv_list <- dir(path = path, pattern = pattern)
+  }
+  n_land <- vector("numeric", length = length(fcsv_list))
+  for (i in 1:length(fcsv_list)) {
+    n_land[i] <- length(count.fields(fcsv_list[i]))
+  }
+  if (is.null(ID) == TRUE) {
+    if (is.null(string_del) == TRUE) {
+      dimnames_fcsv <- gsub(".fcsv", "", fcsv_list)
+    }
+    else {
+      dimnames_fcsv <- gsub(string_del, "", gsub(".fcsv", 
+                                                 "", fcsv_list))
+    }
+  }
+  else {
+    dimnames_fcsv <- ID
+  }
+  if (length(unique(n_land)) != 1) {
+    print(dimnames_fcsv)
+    print(n_land)
+    stop("Specimens have different number of landmarks.")
+  }
+  LM_array <- array(data = NA, dim = c(n_land[1], 3, length(fcsv_list)))
+  dimnames(LM_array)[[3]] <- dimnames_fcsv
+  for (i in 1:length(fcsv_list)) {
+    LM_array[, , i] <- as.matrix(read.csv(file = fcsv_list[i], 
+                                          sep = ",", skip = 3, header = FALSE)[, 2:4])
+  }
+  if (isTRUE(save.txt) == TRUE) {
+    for (i in 1:dim(LM_array)[3]) {
+      write.table(LM_array[, , i], paste0(dimnames(LM_array)[[3]][i], 
+                                          ".txt"), col.names = FALSE, row.names = FALSE)
+    }
+  }
+  return(LM_array)
+}
+
+
 #### Main ####
 #### 1.0 Setting up the DF ####
 # R doesn't have a good way to get the path of where this file is located, unfortunately
@@ -198,8 +250,8 @@ setwd("../Semi_Curves/")
 # finds all files with the pattern in the name
 # this can run quite slowly
 curve_semis_center <- fcsv2array(pattern = "*center*", string_del = "_center_semi-curve")
-curve_semis_L <- fcsv2array(pattern = "*_L_semi-curve*", string_del = "_L_semi-curve")
-curve_semis_R <- fcsv2array(pattern = "*_R_semi-curve*", string_del = "_R_semi-curve")
+curve_semis_L <- fcsv2array2(pattern = "*_L_semi-curve*", string_del = "_L_semi-curve")
+curve_semis_R <- fcsv2array2(pattern = "*_R_semi-curve*", string_del = "_R_semi-curve")
 
 # for some reason a bunch of the L and R semi-curve points are in reverse order
 # need to reverse the LY, U0, and U73 samples
@@ -504,16 +556,23 @@ setwd("../../")
 triple_coords <- gdf_head$coords[,,which(gdf_head$treat == "Triple")]
 ctrl_coords <- gdf_head$coords[,,which(gdf_head$treat == "DMSO")]
 U73_coords <- gdf_head$coords[,,which(gdf_head$treat == "U73122")]
+U0_coords <- gdf_head$coords[,,which(gdf_head$treat == "U0126")]
+LY_coords <- gdf_head$coords[,,which(gdf_head$treat == "LY294002")]
 
 # we are going to calculate the mean shape on the shape coordinates. Everything will be in Procrustes dist.
 triple_mean_shape <- mshape(triple_coords)
 ctrl_mean_shape <- mshape(ctrl_coords)
 U73_mean_shape <- mshape(U73_coords)
+U0_mean_shape <- mshape(U0_coords)
+LY_mean_shape <- mshape(LY_coords)
 
 # Create morphed meshes
 triple_mesh <- tps3d(face_mesh, as.matrix(atlas_head_lm), triple_mean_shape, threads = 1)
 ctrl_mesh <- tps3d(face_mesh, as.matrix(atlas_head_lm), ctrl_mean_shape, threads = 1)
 U73_mesh <- tps3d(face_mesh, as.matrix(atlas_head_lm), U73_mean_shape, threads = 1)
+U0_mesh <- tps3d(face_mesh, as.matrix(atlas_head_lm), U0_mean_shape, threads = 1)
+LY_mesh <- tps3d(face_mesh, as.matrix(atlas_head_lm), LY_mean_shape, threads = 1)
+
 
 # plot heatmap and setup a new reference view
 open3d(zoom = 0.75, userMatrix = frontal, windowRect = c(0, 0, 1000, 700)) 
@@ -530,7 +589,7 @@ load("./lm_data/RGL_heat_head_pos.rdata")
 # plot heatmap - this is used in manuscript
 open3d(zoom = 0.75, userMatrix = heatmap_frontal, windowRect = c(0, 0, 1000, 700)) 
 pdf("./figs/heatmap_treatment_legend.pdf", width = 2.5, height = 6.5)
-meshDist(ctrl_mesh, U73_mesh, rampcolors = c("blue", "white", "red"), sign = TRUE)
+meshDist(ctrl_mesh, U0_mesh, rampcolors = c("blue", "white", "red"), sign = TRUE)
 rgl.snapshot("./figs/Heatmap_treatment.png", top = TRUE) # this one captures 3d output
 rgl::close3d() # this one captures teh heatmap legend as pdf
 dev.off()
