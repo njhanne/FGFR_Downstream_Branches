@@ -153,58 +153,6 @@ plot_pc_heatmap <- function(face_mesh, atlas_head_lm, PCA_head, dimensions) {
 }
 
 
-fcsv2array2 <- function (dir = NULL, pattern = NULL, ID = NULL, string_del = NULL, 
-          save.txt = FALSE) 
-{
-  if (is.null(dir) == TRUE) {
-    path <- getwd()
-  }
-  else {
-    path <- dir
-  }
-  if (is.null(pattern) == TRUE) {
-    fcsv_list <- dir(path = path, pattern = "*.fcsv")
-  }
-  else {
-    fcsv_list <- dir(path = path, pattern = pattern)
-  }
-  n_land <- vector("numeric", length = length(fcsv_list))
-  for (i in 1:length(fcsv_list)) {
-    n_land[i] <- length(count.fields(fcsv_list[i]))
-  }
-  if (is.null(ID) == TRUE) {
-    if (is.null(string_del) == TRUE) {
-      dimnames_fcsv <- gsub(".fcsv", "", fcsv_list)
-    }
-    else {
-      dimnames_fcsv <- gsub(string_del, "", gsub(".fcsv", 
-                                                 "", fcsv_list))
-    }
-  }
-  else {
-    dimnames_fcsv <- ID
-  }
-  if (length(unique(n_land)) != 1) {
-    print(dimnames_fcsv)
-    print(n_land)
-    stop("Specimens have different number of landmarks.")
-  }
-  LM_array <- array(data = NA, dim = c(n_land[1], 3, length(fcsv_list)))
-  dimnames(LM_array)[[3]] <- dimnames_fcsv
-  for (i in 1:length(fcsv_list)) {
-    LM_array[, , i] <- as.matrix(read.csv(file = fcsv_list[i], 
-                                          sep = ",", skip = 3, header = FALSE)[, 2:4])
-  }
-  if (isTRUE(save.txt) == TRUE) {
-    for (i in 1:dim(LM_array)[3]) {
-      write.table(LM_array[, , i], paste0(dimnames(LM_array)[[3]][i], 
-                                          ".txt"), col.names = FALSE, row.names = FALSE)
-    }
-  }
-  return(LM_array)
-}
-
-
 #### Main ####
 #### 1.0 Setting up the DF ####
 # R doesn't have a good way to get the path of where this file is located, unfortunately

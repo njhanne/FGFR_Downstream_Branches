@@ -21,7 +21,10 @@ library(vegan)
 # library(ggbiplot)
 library(factoextra)
 library(gt)
+
 library(abind)
+library(stringr)
+library(dplyr)
 
 
 #### 0 Helpers ####
@@ -50,12 +53,8 @@ get_dec_mesh <- function(mesh='face') {
 }
 
 
-get_palette <- function(lights=FALSE) {
-  if (lights) {
-    return(c('#dddddd', '#ebdadd', "#bbbbbb", "#882256"))
-  } else {
-    return(c("#bbbbbb", "#882256"))
-  }
+get_palette <- function() {
+  return(c('#bbbbbb', '#0177bb', '#13783d','#989936', '#882256'))
 }
 
 
@@ -91,7 +90,7 @@ row.names(classifiers_unord) <- classifiers_unord$id
 
 
 # match the landmark sample names to the classifiers csv
-classifiers <- classifiers_unord[match(dimnames(LMs)[[3]], row.names(classifiers_unord)),]
+# classifiers <- classifiers_unord[match(dimnames(LMs)[[3]], row.names(classifiers_unord)),]
 
 # Landmark array & GPA
 setwd("../..")
@@ -140,21 +139,9 @@ summary(SYM_FGF)
 cat("SYM_FGF", capture.output(summary(SYM_FGF)), 
     file="./output/SYM_FGF.txt", sep="\n", append=TRUE)
 
-Pdist <- ShapeDist(SYM_FGF$coords, SYM_FGF$consensus)
-
-# make the dataframe for better ggplot plotting
-gdf_head <- geomorph.data.frame(GPA_head, treatment = classifiers$treatment, Pdist = Pdist)
 
 #### 3.1. Symmetric component ####
 PCA_SYM_FGF <- gm.prcomp(SYM_FGF$symm.shape)
-
-treatment <- procD.lm(coords ~ treatment, data = gdf_head, RRPP = TRUE)
-summary(treatment)
-summary(treatment, test.type = "var")
-
-treatment_ph <- pairwise(treatment, groups = gdf_head$treatment)
-summary(treatment_ph)
-summary(treatment_ph, test.type = "var", confidence = 0.95, stat.table = TRUE)
 
 pal <- get_palette()
 
@@ -165,10 +152,18 @@ ordiellipse(PCA_SYM_FGF, classifiers$treatment, kind="sd",conf=0.95, border = pa
 legend("bottomleft", pch = 16, col = pal, legend = levels(classifiers$treatment))
 dev.off()
 
+
 # this gives pvalue used in manuscript for symmetric shape change
 ANOVA_ALL_sym <- procD.lm(SYM_FGF$symm.shape ~ classifiers$treatment, 
                           iter=999, RRPP=TRUE, print.progress = FALSE)
+
 summary(ANOVA_ALL_sym)
+summary(ANOVA_ALL_sym, test.type = "var")
+
+treatment_ph <- pairwise(ANOVA_ALL_sym, groups = classifiers$treatment)
+summary(treatment_ph)
+summary(treatment_ph, test.type = "var", confidence = 0.95, stat.table = TRUE)
+
 cat("ANOVA_SYM_FGF", capture.output(summary(ANOVA_ALL_sym)), 
     file="./output/ANOVA_symmetric_component_FGF.txt", sep="\n", append=TRUE)
 
@@ -188,6 +183,12 @@ dev.off()
 ANOVA_ASYM_FGF  <- procD.lm(SYM_FGF$asymm.shape ~ classifiers$treatment, 
                             iter=999, RRPP=TRUE, print.progress = FALSE)
 summary(ANOVA_ASYM_FGF)
+summary(ANOVA_ASYM_FGF, test.type = "var")
+
+treatment_ph <- pairwise(ANOVA_ASYM_FGF, groups = classifiers$treatment)
+summary(treatment_ph)
+summary(treatment_ph, test.type = "var", confidence = 0.95, stat.table = TRUE)
+
 cat("ANOVA_ASYM_FGF", capture.output(summary(ANOVA_ASYM_FGF)), 
     file="./output/ANOVA_asymmetric_component_FGF.txt", sep="\n", append=TRUE)
 
@@ -206,6 +207,12 @@ dev.off()
 ANOVA_FA_FGF  <- procD.lm(SYM_FGF$FA.component ~ classifiers$treatment, 
                           iter=999, RRPP=TRUE, print.progress = FALSE)
 summary(ANOVA_FA_FGF)
+summary(ANOVA_FA_FGF, test.type = "var")
+
+treatment_ph <- pairwise(ANOVA_FA_FGF, groups = classifiers$treatment)
+summary(treatment_ph)
+summary(treatment_ph, test.type = "var", confidence = 0.95, stat.table = TRUE)
+
 cat("ANOVA_FA_FGF", capture.output(summary(ANOVA_ASYM_FGF)), 
     file="./output/ANOVA_Fluctuating_Asymmetry_FGF.txt", sep="\n", append=TRUE)
 
