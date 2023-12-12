@@ -90,11 +90,11 @@ The bad news is that you need to change directory in your terminal to the locati
 
 On Windows:
 ``` 
-& '/full/path/toSlicer.exe' --python-script "./load_and_segment.py" --no-splash --no-main-window
+& '/full/path/toSlicer.exe' --python-script "./load_and_segment.py" --no-splash
 ```
 On Macintosh / Linux:
 ```
-/Applications/Slicer.app/Contents/MacOS/Slicer --no-splash --no-main-window --python-script "/full/path/to/FGFR_Downstream_Branches/Geometric_morphometrics/3D/Slicer_Scripts/load_and_segment.py"
+/Applications/Slicer.app/Contents/MacOS/Slicer --no-splash --python-script "/full/path/to/FGFR_Downstream_Branches/Geometric_morphometrics/3D/Slicer_Scripts/load_and_segment.py"
 ```
 
 ## Placing landmarks

@@ -53,8 +53,12 @@ get_dec_mesh <- function(mesh='face') {
 }
 
 
-get_palette <- function() {
-  return(c('#bbbbbb', '#0177bb', '#13783d','#989936', '#882256'))
+get_palette <- function(lights=FALSE) {
+  if (lights) {
+    return(c('#bbbbbb', '#0177bb', '#13783d','#989936', '#882256', '#dddddd', '#89cced', '#ccddaa', '#ccbb43', '#994556'))
+  } else {
+    return(c('#bbbbbb', '#0177bb', '#13783d','#989936', '#882256'))
+  }
 }
 
 
@@ -80,7 +84,7 @@ colnames(classifiers_unord) <- "id" # rename first column
 classifiers_unord$treatment <- str_match(classifiers_unord$id, "_(.+)_")[,2] 
 # rename treatments
 classifiers_unord <- classifiers_unord %>% mutate(treatment = case_when(treatment =='ctr' ~ 'DMSO',
-                                                                        treatment =='exp' ~ 'Triple',
+                                                                        treatment =='expredo' ~ 'Triple',
                                                                         treatment =='LY' ~ 'LY294002',
                                                                         treatment =='U0' ~ 'U0126',
                                                                         treatment =='U73' ~ 'U73122'))
@@ -146,7 +150,8 @@ PCA_SYM_FGF <- gm.prcomp(SYM_FGF$symm.shape)
 pal <- get_palette()
 
 pdf("./figs/PCA_symmetric_component.pdf", width = 7.5, height = 6)
-plot(PCA_SYM_FGF, pch = 16, col = pal[as.numeric(classifiers$treatment)], cex = 1.25) #, xlim=c(-.12,.1))
+plot(PCA_SYM_FGF, pch = 16, col = pal[as.numeric(classifiers$treatment)], cex = 1.25)
+# text(PCA_SYM_FGF[["x"]][,1], PCA_SYM_FGF[["x"]][,2], dimnames(head_array)[[3]])
 ordiellipse(PCA_SYM_FGF, classifiers$treatment, kind="sd",conf=0.95, border = pal,
             draw = "polygon", alpha = 0, lty = 1)
 legend("bottomleft", pch = 16, col = pal, legend = levels(classifiers$treatment))
@@ -164,7 +169,7 @@ treatment_ph <- pairwise(ANOVA_ALL_sym, groups = classifiers$treatment)
 summary(treatment_ph)
 summary(treatment_ph, test.type = "var", confidence = 0.95, stat.table = TRUE)
 
-cat("ANOVA_SYM_FGF", capture.output(summary(ANOVA_ALL_sym)), 
+cat("ANOVA_SYM_FGF", capture.output(summary(ANOVA_ALL_sym)),
     file="./output/ANOVA_symmetric_component_FGF.txt", sep="\n", append=TRUE)
 
 
@@ -189,7 +194,7 @@ treatment_ph <- pairwise(ANOVA_ASYM_FGF, groups = classifiers$treatment)
 summary(treatment_ph)
 summary(treatment_ph, test.type = "var", confidence = 0.95, stat.table = TRUE)
 
-cat("ANOVA_ASYM_FGF", capture.output(summary(ANOVA_ASYM_FGF)), 
+cat("ANOVA_ASYM_FGF", capture.output(summary(ANOVA_ASYM_FGF)),
     file="./output/ANOVA_asymmetric_component_FGF.txt", sep="\n", append=TRUE)
 
 
@@ -213,7 +218,7 @@ treatment_ph <- pairwise(ANOVA_FA_FGF, groups = classifiers$treatment)
 summary(treatment_ph)
 summary(treatment_ph, test.type = "var", confidence = 0.95, stat.table = TRUE)
 
-cat("ANOVA_FA_FGF", capture.output(summary(ANOVA_ASYM_FGF)), 
+cat("ANOVA_FA_FGF", capture.output(summary(ANOVA_ASYM_FGF)),
     file="./output/ANOVA_Fluctuating_Asymmetry_FGF.txt", sep="\n", append=TRUE)
 
 
@@ -354,7 +359,7 @@ pdf("./figs/mirrored_PCA_treatment_sides.pdf", width = 8.25, height = 6)
 plot(PCA_both_sides, pch = 16, col = pal_light[as.numeric(classifiers_mirrored$treatment_mirror)], cex = 1.5)
 ordiellipse(PCA_both_sides, classifiers_mirrored$treatment_mirror, kind="ehull",conf=0.95, border = pal,
             draw = "polygon", alpha = 0, lty = 1)
-legend("bottomright", pch = 16, col = pal_light, legend = levels(classifiers_mirrored$treatment_mirror))
+legend("bottomleft", pch = 16, col = pal_light, legend = levels(classifiers_mirrored$treatment_mirror))
 dev.off()
 
 
@@ -377,7 +382,7 @@ if (file.exists("./output/PCA_contra.txt")) {
 cat("PCA shape variables raw - contralateral side mirrored", capture.output(summary(PCA_contra)), 
     file="./output/PCA_contra.txt", sep="\n", append=TRUE)
 
-pal_light_only <- pal_light[1:2]
+pal_light_only <- pal_light[6:10]
 pdf("./figs/mirrored_PCA_contralateral_treatment.pdf", width = 8.25, height = 6)
 plot(PCA_contra, pch = 16, col = pal_light_only[as.numeric(classifiers$treatment)], cex = 2)
 ordiellipse(PCA_contra, classifiers$treatment, kind="ehull",conf=0.95, border = pal_light_only,
@@ -390,6 +395,9 @@ t_contra <- geomorph.data.frame(GPA_mirrored_contra, treatment = classifiers$tre
 ANOVA_contra_mirrored  <- procD.lm(coords ~ treatment, data=t_contra, 
                                  iter=999, RRPP=TRUE, print.progress = FALSE)
 summary(ANOVA_contra_mirrored)
+ANOVA_contra_mirrored_pw <- pairwise(ANOVA_contra_mirrored, groups = t_contra$treatment)
+# these are pvalues used in manuscript
+summary(ANOVA_contra_mirrored_pw)
 
 
 #### 4.6. PCA treated side #####
@@ -414,7 +422,9 @@ t_treat <- geomorph.data.frame(GPA_mirrored_treat, treatment = classifiers$treat
 ANOVA_treat_mirrored  <- procD.lm(coords ~ treatment, data=t_treat, 
                                  iter=999, RRPP=TRUE, print.progress = FALSE)
 summary(ANOVA_treat_mirrored)
-
+ANOVA_treat_mirrored_pw <- pairwise(ANOVA_treat_mirrored, groups = t_treat$treatment)
+# these are pvalues used in manuscript
+summary(ANOVA_treat_mirrored_pw)
 
 #### 4.7. Procrustes distance ####
 Pdist <- ShapeDist(GPA_mirrored_double$coords, GPA_mirrored_double$consensus)
@@ -429,7 +439,10 @@ ggplot_df <- as.data.frame(cbind(as.character(gdf_mirrored$treatment_mirror),
 colnames(ggplot_df) <- c("treatment_mirror", "treatment", "Pdist")
 row.names(ggplot_df) <- dimnames(gdf_mirrored$coords)[[3]]
 ggplot_df$treatment <- as.factor(ggplot_df$treatment)
+levels(ggplot_df$treatment) <- c('DMSO', 'U0126', 'LY294002', 'U73122', 'Triple')
 ggplot_df$treatment_mirror <- as.factor(ggplot_df$treatment_mirror)
+levels(ggplot_df$treatment_mirror) <- c( 'treat_DMSO', 'treat_U0126', 'treat_LY294002', 'treat_U73122', 'treat_Triple',
+                                         'contra_DMSO', 'contra_U0126',  'contra_LY294002', 'contra_U73122', 'contra_Triple')
 ggplot_df$Pdist <- as.numeric(as.character(ggplot_df$Pdist))
 
 pdf("./figs/mirrored_Pdist_treatment.pdf", width = 6.5, height = 6.5)
@@ -670,7 +683,7 @@ image_write(imgs, path = paste0("./figs/pc_morphs/mirrored_SHAPE_heatmap_morphs_
 
 
 
-# 6. Face integration CTRL vs Treatment ####
+# 6. Face integration CTRL vs Treatments ####
 
 ?integration.test
 
@@ -684,7 +697,7 @@ side[side.2] <- "treated"
 side <- side[-non.sym]
 
 # Integration face all
-face_integration <- integratiploon.test(GPA_geomorph$coords[-non.sym,,], partition.gp = side, iter = 999)
+face_integration <- integration.test(GPA_geomorph$coords[-non.sym,,], partition.gp = side, iter = 999)
 summary(face_integration) # Test summary
 p<- plot(face_integration) # PLS plot
 make_ggplot(p)
@@ -704,20 +717,35 @@ ggplot(plot_df, aes(x=x, y=y, color = treatment)) +
 dev.off()
 
 # Compare integration of the face between treatment and control
-face_integration_CTRL <- integration.test(GPA_geomorph$coords[-non.sym, , which(classifiers$treatment == "control")], 
+face_integration_CTRL <- integration.test(GPA_geomorph$coords[-non.sym, , which(classifiers$treatment == "DMSO")], 
                                           partition.gp = side, iter = 999)
 
-face_integration_TREATMENT <- integration.test(GPA_geomorph$coords[-non.sym, , which(classifiers$treatment == "triple")], 
+face_integration_Triple <- integration.test(GPA_geomorph$coords[-non.sym, , which(classifiers$treatment == "Triple")], 
                                                partition.gp = side, iter = 999)
+face_integration_U0 <- integration.test(GPA_geomorph$coords[-non.sym, , which(classifiers$treatment == "U0126")], 
+                                            partition.gp = side, iter = 999)
+face_integration_LY <- integration.test(GPA_geomorph$coords[-non.sym, , which(classifiers$treatment == "LY294002")], 
+                                            partition.gp = side, iter = 999)
+face_integration_U73 <- integration.test(GPA_geomorph$coords[-non.sym, , which(classifiers$treatment == "U73122")], 
+                                            partition.gp = side, iter = 999)
 
 # these p-values are used in manuscript
 summary(face_integration_CTRL) # Test summary
-summary(face_integration_TREATMENT) # Test summary
+summary(face_integration_Triple) # Test summary
 plot(face_integration_CTRL) # PLS plot
-plot(face_integration_TREATMENT)
+plot(face_integration_Triple)
+summary(face_integration_U0) # Test summary
+summary(face_integration_LY) # Test summary
+summary(face_integration_U73) # Test summary
 
-PLS_comparison <- compare.pls(CTRL = face_integration_CTRL, TRIPLE = face_integration_TREATMENT)
-summary(PLS_comparison)
+PLS_comparison_Triple <- compare.pls(CTRL = face_integration_CTRL, TRIPLE = face_integration_Triple)
+summary(PLS_comparison_Triple)
+PLS_comparison_U0 <- compare.pls(CTRL = face_integration_CTRL, U0126 = face_integration_U0)
+summary(PLS_comparison_U0)
+PLS_comparison_LY <- compare.pls(CTRL = face_integration_CTRL, LY294002 = face_integration_LY)
+summary(PLS_comparison_LY)
+PLS_comparison_U73 <- compare.pls(CTRL = face_integration_CTRL, U73122 = face_integration_U73)
+summary(PLS_comparison_U73)
 
 # Delete file if it exists
 if (file.exists("./output/Integration_face_comparisons_CTRL_TRIPLE_May2023.txt")) {
