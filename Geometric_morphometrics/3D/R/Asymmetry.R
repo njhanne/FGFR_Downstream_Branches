@@ -396,7 +396,6 @@ ANOVA_contra_mirrored  <- procD.lm(coords ~ treatment, data=t_contra,
                                  iter=999, RRPP=TRUE, print.progress = FALSE)
 summary(ANOVA_contra_mirrored)
 ANOVA_contra_mirrored_pw <- pairwise(ANOVA_contra_mirrored, groups = t_contra$treatment)
-# these are pvalues used in manuscript
 summary(ANOVA_contra_mirrored_pw)
 
 
@@ -423,7 +422,6 @@ ANOVA_treat_mirrored  <- procD.lm(coords ~ treatment, data=t_treat,
                                  iter=999, RRPP=TRUE, print.progress = FALSE)
 summary(ANOVA_treat_mirrored)
 ANOVA_treat_mirrored_pw <- pairwise(ANOVA_treat_mirrored, groups = t_treat$treatment)
-# these are pvalues used in manuscript
 summary(ANOVA_treat_mirrored_pw)
 
 #### 4.7. Procrustes distance ####
