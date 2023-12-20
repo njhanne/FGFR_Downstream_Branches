@@ -99,7 +99,7 @@ row.names(classifiers_unord) <- classifiers_unord$id
 # Landmark array & GPA
 setwd("../..")
 head_array <- readRDS("./lm_data/Head_LM_array_FGF_embryos.rds")
-GPA_geomorph <- readRDS("./lm_data/GPA_FGF_embryos.rds")
+GPA_geomorph <- readRDS("./lm_data/GPA_FGF_embryos.rds") #'gpa_head' from gmm_analysis.R
 
 classifiers <- classifiers_unord[match(dimnames(head_array)[[3]], row.names(classifiers_unord)),]
 
@@ -231,9 +231,52 @@ ANOVA_DA_FGF  <- procD.lm(SYM_FGF$DA.component ~ classifiers$treatment,
                           iter=999, RRPP=TRUE, print.progress = FALSE)
 summary(ANOVA_DA_FGF)
 
+
 #### 3.5. TO DO NEXT ####
 #### 3.6. PCA ####
 # Make morphs for each component (PCA)
+# load mesh of the specimen closest to the mean shape
+setwd('./lm_data/Meshes/')
+face_mesh <- get_dec_mesh('face')
+setwd("../../")
+
+# get landmarks for each treatment group
+Pdist <- ShapeDist(GPA_geomorph$coords, GPA_geomorph$consensus)
+# make the dataframe for better ggplot plotting
+gdf_head <- geomorph.data.frame(GPA_geomorph, treatment = classifiers$treatment, Pdist = Pdist)
+
+
+# get warp for certain PC values rather than mean shapes
+# symmetric
+sym_PC1 = PCA_SYM_FGF$x[,1] # get pc1
+sym_PC2 = PCA_SYM_FGF$x[,2] # get pc2
+
+sym_PC1_ctrl <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_geomorph$coords, x= sym_PC1, Intercept = FALSE, pred1 = .05)[[1]], threads=1)
+sym_PC1_trt <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_geomorph$coords, x= sym_PC1, Intercept = FALSE, pred1 = -.1)[[1]], threads=1)
+
+sym_PC2_ctrl <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_geomorph$coords, x= sym_PC2, Intercept = FALSE, pred1 = .05)[[1]], threads=1)
+sym_PC2_trt <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_geomorph$coords, x= sym_PC2, Intercept = FALSE, pred1 = -.05)[[1]], threads=1)
+
+open3d(zoom = 0.75, userMatrix = frontal, windowRect = c(0, 0, 1000, 700)) 
+
+meshDist(sym_PC1_ctrl, sym_PC1_trt,  rampcolors = c("blue", "white", "red"), sign = TRUE)
+meshDist(sym_PC2_ctrl, sym_PC2_trt,  rampcolors = c("blue", "white", "red"), sign = TRUE)
+
+#asymmetry
+asym_PC1 = PCA_ASYM_FGF$x[,1] # get pc1
+asym_PC2 = PCA_ASYM_FGF$x[,2] # get pc2
+
+asym_PC1_ctrl <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_geomorph$coords, x= asym_PC1, Intercept = FALSE, pred1 = .05)[[1]], threads=1)
+asym_PC1_trt <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_geomorph$coords, x= asym_PC1, Intercept = FALSE, pred1 = -.1)[[1]], threads=1)
+
+asym_PC2_ctrl <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_geomorph$coords, x= asym_PC2, Intercept = FALSE, pred1 = .025)[[1]], threads=1)
+asym_PC2_trt <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_geomorph$coords, x= asym_PC2, Intercept = FALSE, pred1 = -.05)[[1]], threads=1)
+
+open3d(zoom = 0.75, userMatrix = frontal, windowRect = c(0, 0, 1000, 700)) 
+
+meshDist(asym_PC1_ctrl, asym_PC1_trt,  rampcolors = c("blue", "white", "red"), sign = TRUE)
+meshDist(asym_PC2_ctrl, asym_PC2_trt,  rampcolors = c("blue", "white", "red"), sign = TRUE)
+
 # Make panels PC1-PC4
 # Make heatmap for DA left vs right
 # Make table with proportion of variance explained by each component
