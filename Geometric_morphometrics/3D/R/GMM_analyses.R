@@ -575,7 +575,8 @@ PC1_ctrl <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_head$
 PC1_trt <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_head$coords, x= PC, Intercept = FALSE, pred1 = -.1)[[1]], threads=1)
 PC1_trt_mild <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_head$coords, x= PC, Intercept = FALSE, pred1 = -.05)[[1]], threads=1)
 PC1_trt_milder <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_head$coords, x= PC, Intercept = FALSE, pred1 = 0)[[1]], threads=1)
-PC2_ctrl <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_head$coords, x= PC2, Intercept = FALSE, pred1 = -.05)[[1]], threads=1)
+
+PC2_ctrl <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_head$coords, x= PC2, Intercept = FALSE, pred1 = -.025)[[1]], threads=1)
 PC2_trt <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_head$coords, x= PC2, Intercept = FALSE, pred1 = .05)[[1]], threads=1)
 
 
@@ -587,7 +588,7 @@ meshDist(PC1_ctrl, PC1_trt_mild, from= -.015, to= 0.03, rampcolors = c("blue", "
 meshDist(PC1_ctrl, PC1_trt_milder, from= -.015, to= 0.03, rampcolors = c("blue", "white", "red"), sign = TRUE)
 meshDist(PC1_ctrl, ctrl_mesh, from= -.015, to= 0.03, rampcolors = c("blue", "white", "red"), sign = TRUE)
 
-meshDist(PC2_ctrl, PC2_trt, from=-0.025, to=0.025, rampcolors = c("blue", "white", "red"), sign = TRUE)
+meshDist(PC2_ctrl, PC2_trt, from=-0.015, to=0.03, rampcolors = c("blue", "white", "red"), sign = TRUE)
 
 
 
@@ -605,6 +606,21 @@ open3d(zoom = 0.75, userMatrix = heatmap_frontal, windowRect = c(0, 0, 1000, 700
 pdf("./figs/heatmap_treatment_legend.pdf", width = 2.5, height = 6.5)
 meshDist(ctrl_mesh, U0_mesh, from=-.01, to=0.015, rampcolors = c("blue", "white", "red"), sign = TRUE)
 rgl.snapshot("./figs/Heatmap_U0.png", top = TRUE) # this one captures 3d output
+rgl::close3d() # this one captures the heatmap legend as pdf
+dev.off()
+
+# plot the two first PC heatmaps for mean shape
+open3d(zoom = 0.75, userMatrix = heatmap_frontal, windowRect = c(0, 0, 1000, 700)) 
+pdf("./figs/heatmap_PC1_pt05_to_-0pt1_legend.pdf", width = 2.5, height = 6.5)
+meshDist(PC1_ctrl, PC1_trt, from= -.015, to= 0.03, rampcolors = c("blue", "white", "red"), sign = TRUE)
+rgl.snapshot("./figs/heatmap_PC1_pt05_to_-0pt1.png", top = TRUE) # this one captures 3d output
+rgl::close3d() # this one captures the heatmap legend as pdf
+dev.off()
+
+open3d(zoom = 0.75, userMatrix = heatmap_frontal, windowRect = c(0, 0, 1000, 700)) 
+pdf("./figs/heatmap_PC2_-0pt025_to_0pt05_legend.pdf", width = 2.5, height = 6.5)
+meshDist(PC2_ctrl, PC2_trt, from= -.015, to= 0.03, rampcolors = c("blue", "white", "red"), sign = TRUE)
+rgl.snapshot("./figs/heatmap_PC2_-0pt025_to_0pt05.png", top = TRUE) # this one captures 3d output
 rgl::close3d() # this one captures the heatmap legend as pdf
 dev.off()
 
