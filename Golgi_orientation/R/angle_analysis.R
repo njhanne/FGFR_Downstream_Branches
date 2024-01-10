@@ -155,6 +155,116 @@ filter_baseline_distance <- function(baseline_mask_filenames, df, distance=200, 
 }
 
 
+get_transform_matrices <- function(info_df, landmark_filenames) {
+  info_df$old_filename_generic <- str_remove_all(info_df$old_filename, "_nuc.tif|_gm130.tif")
+  info_df$old_filename_generic_noside <- str_remove_all(info_df$old_filename_generic, "_treated|_control")
+  transformation_matrix <- NA
+  samples <- unique(info_df$old_filename_generic_noside)
+  for (sample in 1:1) { #length(samples)) {
+    matched_lm_files <- landmark_filenames %>% filter(str_starts(landmark_filenames, samples[sample]))
+    if (nrow(matched_lm_files) == 3) {
+      transformation_matrices <- compute_transform_matrices(matched_lm_files)
+      # this is actually an interesting issue - I used the name 'sample' in my code here for the iterator
+      # but it is also a column name in info_df, which makes this code normally not work
+      # the fix (if you don't want to rename the variable, which I probably should) is below with the .env$
+      info_df <- info_df %>% mutate(transformation_matrix = ifelse(old_filename_generic_noside == samples[.env$sample]
+                                                                   & side == 'control', I(list(transformation_matrices[[1]])), 
+                                                                   transformation_matrix))
+      info_df <- info_df %>% mutate(transformation_matrix = ifelse(old_filename_generic_noside == samples[.env$sample]
+                                                                   & side == 'treated', I(list(transformation_matrices[[2]])), 
+                                                                   transformation_matrix))
+    }
+  }
+  return(info_df)
+}
+
+compute_transform_matrices <- function(landmark_filenames) {
+  # first load in the three landmark zips
+  for (lm_zip in 1:nrow(landmark_filenames)) {
+    if (str_detect(landmark_filenames[lm_zip,1], "overview")) {
+      overview_lms <- read.ijzip(file.path("./imagej_rois/overview_landmarks/", landmark_filenames[lm_zip,1]), verbose = FALSE)
+      # pulls out the coordinates from the zip and flattens them to a vector
+      # first two are contralateral, last two are treated side
+      B_full <- unlist(lapply(overview_lms, function(l) as.numeric(l$coords)), use.names = FALSE)
+    }
+    else if (str_detect(landmark_filenames[lm_zip,1], "control")) {
+      contra_lms <- read.ijzip(file.path("./imagej_rois/overview_landmarks/", landmark_filenames[lm_zip,1]), verbose = FALSE)
+      contra_lms <- unlist(lapply(contra_lms, function(l) as.numeric(l$coords)), use.names = FALSE)
+    } 
+    else {
+      treated_lms <- read.ijzip(file.path("./imagej_rois/overview_landmarks/", landmark_filenames[lm_zip,1]), verbose = FALSE)
+      treated_lms <- unlist(lapply(treated_lms, function(l) as.numeric(l$coords)), use.names = FALSE)
+    }
+  }
+  
+  contra_transform_matrix <- solve_transform_matrix_from_lms(B_full[1:4], contra_lms)
+  treated_transform_matrix <- solve_transform_matrix_from_lms(B_full[5:8], treated_lms)
+  return(list(contra_transform_matrix, treated_transform_matrix))
+}
+
+
+solve_transform_matrix_from_lms <- function(overview_lms, stack_lms) {
+  # need to do some matrix algebra here, but I think this should work
+  # there shouldn't be any image rotation so we can solve with two landmarks
+  # S is scale
+  # T is translation
+  # M = [Sx, 0, Tx
+  #      0, Sy, Ty
+  #      0,  0,  1]
+  #
+  # [x', y', 1] = [x, y, 1]*M
+  # Here the prime xy are landmark data from overview image and non-prime are
+  # from z-stack, but we are ignoring z plane.
+  #
+  # We can solve for M with these equations
+  # A = B
+  # x1' = x1*Sx + 0*Sy  + 1*Tx + 0*Ty
+  # y1' = 0*Sx  + y1*Sy + 0*Tx + 1*Ty
+  # x2' = x2*Sx + 0*Sy  + 1*Tx + 0*Ty
+  # y2' = 0*Sx  + y2*Sy + 0*Tx + 1*Ty
+  # A = [x1, 0, 1, 0
+  #      0, y1, 0, 1
+  #      x2, 0, 1, 0
+  #      0, y2, 0, 1]
+  # B = [x1', y1', x2', y2']
+
+  A <- matrix(c(stack_lms[1], 0, 1, 0,
+                       0, stack_lms[2], 0, 1,
+                       stack_lms[3], 0, 1, 0,
+                       0, stack_lms[4], 0, 1), 4, 4, byrow=TRUE)
+  B <- overview_lms
+  M_vals <- solve(A, B)
+  M <- matrix(c(M_vals[1], 0, M_vals[3],
+                0, M_vals[2], M_vals[4],
+                0, 0, 1), 3, 3, byrow=TRUE)
+  return(M)
+}
+
+
+transform_centroids_xy <- function(temp_df, info_df) {
+  # continuing the matrix algebra from above:
+  # [x',y',1] =  M * [x, y, 1]
+  for (image in 1:nrow(info_df)) {
+    if (!is.na(info_df[image,]$transformation_matrix)) {
+      rows <- which(temp_df$t == info_df[image,]$new_filename)
+      M_vals <- info_df[image,]$transformation_matrix
+      #pull out the centroids and add the column of 1 to the end for matrix multiplication
+      nuc_centroids <- temp_df[rows,] %>% select(nuclei_centroidx, nuclei_centroidy) %>% mutate(one_col = 1)
+      golgi_centroids <- temp_df[rows,] %>% select(GM130_centroidx, GM130_centroidy) %>% mutate(one_col = 1)
+      # %*% is matrix multiplication, the t in beginning transposes the results to be in columns instead of rows, the 1 tells it to go row-wise
+      transformed_nuc_centroids <- t(apply(nuc_centroids, 1, function (x) M_vals[[1]] %*% as.numeric(x)))
+      transformed_golgi_centroids <- t(apply(golgi_centroids, 1, function (x) M_vals[[1]] %*% as.numeric(x)))
+      # save them, this is MUCH faster than dplyr for some reason
+      temp_df[rows,]$nuclei_centroidx_overview <- transformed_nuc_centroids[,1]
+      temp_df[rows,]$nuclei_centroidy_overview <- transformed_nuc_centroids[,2]
+      temp_df[rows,]$GM130_centroidx_overview <- transformed_golgi_centroids[,1]
+      temp_df[rows,]$GM130_centroidy_overview <- transformed_golgi_centroids[,2]
+    }
+  }
+  return(temp_df)
+}
+
+
 flip_y_angles <- function(df_to_flip) {
   df_flipped_control <- df_to_flip %>% filter((treatment == 'LY' & side_num == 1) |  (treatment != 'LY' & side_num == 0))
   df_flipped_control <- df_flipped_control %>% mutate(angle = case_when(angle <= pi ~ pi-angle, angle > pi ~ 3*pi - angle))
@@ -461,6 +571,27 @@ df <- compile_angle_df() # this will take a while! be patient
 saveRDS(df, file='combined_angles.Rda') 
 
 
+### Try to align landmarks between overview image and each side stack
+# Many of them have been flipped already from the overview, but it seems like the 
+# right side of overview is the bead treated side. Let's do landmark 1-2 be contra
+# side and landmark 3-4 be treated side
+# need to perform this before the following angle adjustment and flipping as we want them to 
+# be aligned with the overview image!
+info_df <- read.csv('GM130_image_log.csv')
+landmark_filenames <- list.files(path="./imagej_rois/overview_landmarks/", pattern=".zip$", recursive=TRUE)
+landmark_filenames <- data.frame(landmark_filenames)
+
+# this will save all the transform matrices as lists in the info_df
+info_df <- get_transform_matrices(info_df, landmark_filenames)
+
+# this will apply them to the actual xy data in the main df
+df$nuclei_centroidx_overview <- NA
+df$nuclei_centroidy_overview <- NA
+df$GM130_centroidx_overview <- NA
+df$GM130_centroidy_overview <- NA
+df <- transform_centroids_xy(df, info_df)
+
+
 ### Correct angles on any images that are not 'square'
 # rotates all angles in a given image by a set angle
 # in this data we have a horizontal angle pointing right as 0 degrees
@@ -469,7 +600,6 @@ saveRDS(df, file='combined_angles.Rda')
 # then click 'measure' (ctrl+m) and get the angle
 # just subtract this angle to all other angles
 # see the example image in the github readme
-info_df <- read.csv('GM130_image_log.csv')
 df <- adjust_base_angles(df, info_df)
 
 
