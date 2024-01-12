@@ -17,6 +17,7 @@ library(stringr)
 # needed for masking out unwanted regions
 library(RImageJROI)
 library(sf)
+library(sfnetworks)
 
 # needed for 'globe' plots
 library(terra)
@@ -178,6 +179,7 @@ get_transform_matrices <- function(info_df, landmark_filenames) {
   return(info_df)
 }
 
+
 compute_transform_matrices <- function(landmark_filenames) {
   # first load in the three landmark zips
   for (lm_zip in 1:nrow(landmark_filenames)) {
@@ -275,6 +277,89 @@ flip_y_angles <- function(df_to_flip) {
   df_original_control <- df_to_flip %>% filter((treatment != 'LY' & side_num == 1) |  (treatment == 'LY' & side_num == 0))
   df_flipped_control <- rbind(df_flipped_control, df_original_control)
   return(df_flipped_control)
+}
+
+
+get_positional_angle <- function(df_temp, octile_zips) {
+  sample_names <- unique(df_temp$old_filename_generic_noside)
+  for (image in 1:length(sample_names)) {
+    octile_zip <- octile_zips %>% filter(str_starts(octile_zips, sample_names[image]))
+    if (length(octile_zip[[1]] != 0)) {
+      octile_rois <- read.ijzip(file.path("./imagej_rois/overview_octiles/", octile_zip[[1]]), verbose = FALSE)
+      octile_linestrings <- st_sfc(lapply(octile_rois, function(x) st_linestring(x$coords, dim="XY")))
+      rows <- which(df_temp$old_filename_generic_noside == sample_names[image])
+      xmax <- attributes(octile_linestrings)$bbox[['xmax']]
+      positional_angles <- data.frame(matrix(ncol=3, nrow=length(rows)))
+      for (nuc_pair in 1:length(rows)) {
+        row <- df_temp[rows[nuc_pair],]
+        extended_line <- extend_line(row, xmax)
+        # intersects gives list of number of intersections b/w extended line and each octile, 
+        # the which gives the index for the octile that contains intersection
+        intersected_segments <- st_intersects(octile_linestrings, extended_line)
+        intersected_segment <- which(lapply(intersected_segments, function(x) unlist(x)) != 0)
+        if (length(intersected_segment != 0)) {
+          intersection_stats <- distance_along_octile(octile_linestrings, extended_line, intersected_segment[1])
+          positional_angles[nuc_pair, 1] <- intersection_stats[1][[1]]
+          positional_angles[nuc_pair, 2] <- intersection_stats[2][[1]][1]
+          positional_angles[nuc_pair, 3] <- intersection_stats[2][[1]][2]
+          # print(positional_angle*180/pi)
+          # p <- ggplot() + geom_sf(data = octile_linestrings, color = 'black') +
+          #   geom_sf(data = octile_linestrings[intersected_segment[1]], color = 'blue') +
+          #   geom_point(x = row$nuclei_centroidx_overview, y = row$nuclei_centroidy_overview, aes(color = 'red')) +
+          #   geom_sf(data = st_intersection(octile_linestrings, extended_line), color='red') +
+          #   geom_sf(data = extended_line)
+          # print('pause')
+        }
+        else {
+          print(octile_zip[[1]])
+          print(nuc_pair)
+          print('make better rois')
+          # p <- ggplot() + geom_sf(data = octile_linestrings, color = 'black') + geom_sf(data = extended_line)
+        }
+      }
+      df_temp[rows,]$positional_angle <- positional_angles[,1]
+      df_temp[rows,]$intersectionx <- positional_angles[,2]
+      df_temp[rows,]$intersectiony <- positional_angles[,3]
+    }
+  }
+  return(df_temp)
+}
+
+
+extend_line <- function(df_row, xmax) {
+  extended_x <- df_row$nuclei_centroidx_overview + df_row$unit_x * 4*xmax 
+  extended_y <- df_row$nuclei_centroidy_overview + df_row$unit_y * 4*xmax
+  extended_line <- st_linestring(matrix(c(df_row$nuclei_centroidx_overview, df_row$nuclei_centroidy_overview, extended_x, extended_y), 2, 2, byrow=TRUE), dim="XY")
+  return(extended_line)
+}
+
+
+distance_along_octile <- function(linestrings, extended_line, linestring_i) {
+  # https://stackoverflow.com/a/77688302
+  # I'm sure there are other ways of doing this but the sfnetworks library looks 
+  # like it will be much simpler!
+  
+  # putting the first element here in case it hits two octiles. This could maybe happen
+  # near boundaries, and they should be clsoe enough together that the angle
+  # will be nearly the same anyway.
+  intersected_point <- st_intersection(linestrings[linestring_i], extended_line)
+  intersected_point <- st_cast(intersected_point, 'POINT')[1]
+  octile_network <- as_sfnetwork(linestrings[linestring_i][1])
+  subnet <- st_network_blend(octile_network, intersected_point)
+  length_table <- subnet %>% activate("edges") %>% st_as_sf() %>% mutate(Length = st_length(x))
+  ratio <- pi/4 - (length_table$Length[2] / (length_table$Length[1]+length_table$Length[2]) * pi/4)
+  ratio <- pi + pi/4*(linestring_i-1) + ratio
+  return(c(ratio,intersected_point))
+}
+
+
+plot_extended_lines <- function(filtered_df, octile_files) {
+  #load octiles
+  
+  p <- ggplot() + geom_sf(data = octiles, color = 'black') +
+    geom_point(x = row$nuclei_centroidx_overview, y = row$nuclei_centroidy_overview, aes(color = 'red')) +
+    geom_sf(data = st_intersection(octile_linestrings, extended_line), color='red') +
+    geom_sf(data = extended_line)
 }
 
 
@@ -414,10 +499,10 @@ plot.windrose <- function(data, dirres = 10, color, control) {
   print(max(T_data$z)*100)
   
   if(missing(control)) {
-    p.windrose <- ggplot(data = T_data, aes(x = dir.binned, y = z, fill = color, color = color)) +
+  p.windrose <- ggplot(data = T_data, aes(x = dir.binned, y = z, fill = color, color = color)) +
       geom_bar(width = 1, linewidth = .5, stat='identity') +
       scale_x_discrete(drop = FALSE, labels = waiver()) +
-      scale_y_continuous(limits = c(0, 0.042), expand = c(0, 0),  breaks = c(0,.01,.02,.03,.04)) +
+      # scale_y_continuous(limits = c(0, 0.042), expand = c(0, 0),  breaks = c(0,.01,.02,.03,.04)) +
       coord_polar(start = ((270-(dirres/2))) * pi/180, direction = -1) +
       scale_fill_manual(name = "treated", values = color, drop = FALSE) +
       scale_color_manual(name = "treated", values = c('black','black'), drop = FALSE) +
@@ -583,6 +668,7 @@ landmark_filenames <- data.frame(landmark_filenames)
 
 # this will save all the transform matrices as lists in the info_df
 info_df <- get_transform_matrices(info_df, landmark_filenames)
+df <- left_join(df, info_df %>% select(new_filename, old_filename_generic_noside) %>% distinct(), by=c('t' = 'new_filename'))
 
 # this will apply them to the actual xy data in the main df
 df$nuclei_centroidx_overview <- NA
@@ -619,7 +705,7 @@ df <- flip_y_angles(df)
 # so we need to use the 'simple features' sf library to convert roi points into lines, 
 # and then those lines into polygons. sf can then see which centroids are within the polygon
 mask_filenames <- list.files(path="./imagej_rois/region_mask_rois/", pattern=".roi$", recursive=TRUE)
-df_masked <- mask_out_centroids(df, mask_filenames, TRUE)
+df_masked <- mask_out_centroids(df, mask_filenames, FALSE)
 
 
 ### filter based on distance from the 'baseline' roi line
@@ -631,10 +717,48 @@ df_masked <- mask_out_centroids(df, mask_filenames, TRUE)
 # close to the neural ectoderm
 baseline_mask_filenames <- list.files(path="./imagej_rois/baseline_rois/", pattern=".roi$")
 # this is another slow one, be patient
-df_baseline_masked <- filter_baseline_distance(baseline_mask_filenames, df_masked, 200, TRUE)
+df_baseline_masked <- filter_baseline_distance(baseline_mask_filenames, df_masked, 200, FALSE)
 
 
-#### 2 Cellularity #### 
+#### 2 Region 'Aiming' Analysis ####
+### Instead of using the angle b/w the nuclei and Golgi we will make a pseudo-angle 
+### based on what boundary part of the tissue the angle is pointing at
+# This means that a cell in the edge of globular process pointing 'left' at base of
+# gp-nasal pit boundary will have same angle as a cell at the top of the nasal pit
+# pointing 'down' at tje gp-np boundary. They are pointing at the same feature
+# despite having true angles nearly 90 degrees apart.
+
+# To perform this analysis I have drawn eight line rois around the boundary of tissue
+# on the overview images that (mostly) capture the entire FNP and nasal pit area.
+# Each octile will encompass (ha!) 45 degrees on a windrose plot. The actual angle
+# will be calculated as the distance along the octile roi to the intersection 
+# of a line radiating (more dumb word play) from the nuclei centroid towards its'
+# golgi centroid.
+
+# load in the rois. There are 8, starting at the left nasal pit and moving ccw
+# 1 top of left np to gp
+# 2 gp to midline
+# 3 midline to right gp
+# 4 gp to np
+# 5 np to neural area lining up in y with gp octile break
+# 6 neural area to midline y octile break
+# 7 neural midline to left nueral gp break
+# 8 neural gp break to top of left np
+octile_filenames <- list.files(path="./imagej_rois/overview_octiles/", pattern=".zip$", recursive=TRUE)
+octile_filenames <- data.frame(octile_filenames)
+
+# this is quite slow
+df_baseline_masked$positional_angle <- NA
+df_baseline_masked$intersectionx <- NA
+df_baseline_masked$intersectiony <- NA
+df_baseline_masked <- get_positional_angle(df_baseline_masked, octile_filenames)
+df_baseline_masked$positional_angle <- as.numeric(df_baseline_masked$positional_angle)
+df_baseline_masked <- df_baseline_masked %>% mutate(positional_angle = case_when(positional_angle > 2*pi ~ positional_angle - 2*pi,
+                                                                                 positional_angle < 0 ~ angle + 2*pi,
+                                                                                 TRUE ~ positional_angle))
+
+
+#### 3 Cellularity #### 
 ### Calculate cells per area in the masks above
 # This will match the file names of the two different ImageJ roi files we used
 # we will use this to calculate area
@@ -661,7 +785,7 @@ cell_plot <- ggplot(df_cellularity, aes(fill = side, y=cells_per_sqmicron, x=tre
 plot(cell_plot)
 
 
-#### 3 Watson U2 tests ####
+#### 4 Watson U2 tests ####
 ### First do some traditional summary statistics
 circular_statistics <- list()
 # get actual circle stats for export
@@ -730,9 +854,10 @@ gID <- as.integer(as.factor(cellpose_DMSO_control$id))
 WalraffTest(cdat,ndat,g,gID)
 
 
-#### 4 Windrose plotting ####
+#### 5 Windrose plotting ####
 graphing_df <- df_baseline_masked
-graphing_df$angle_deg <- graphing_df$angle * 180 / pi
+# graphing_df$angle_deg <- graphing_df$angle * 180 / pi
+graphing_df$angle_deg <- as.numeric(graphing_df$positional_angle) * (180 / pi)
 graphing_df$rel_z <- graphing_df$delta_z / graphing_df$distance
 graphing_df <- graphing_df %>% mutate(side_spd = case_when(side == 'control' ~ 0,
                                                            side == 'treated' ~ 1))
@@ -779,7 +904,7 @@ for (i in 1:length(levels(graphing_df$treatment))) {
 }
 
 
-#### 5 Mollweide Plots ####
+#### 6 Mollweide Plots ####
 df_3d_proj <- df_baseline_masked
 df_3d_proj$lat <- (pi/2 - acos(df_3d_proj$unit_z))*180/pi
 df_3d_proj$lon <- df_3d_proj$angle*180/pi + 270
