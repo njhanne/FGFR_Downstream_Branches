@@ -164,6 +164,7 @@ get_transform_matrices <- function(info_df, landmark_filenames) {
   for (sample in 1:length(samples)) {
     matched_lm_files <- landmark_filenames %>% filter(str_starts(landmark_filenames, samples[sample]))
     if (nrow(matched_lm_files) == 3) {
+      print(matched_lm_files[1])
       transformation_matrices <- compute_transform_matrices(matched_lm_files)
       # this is actually an interesting issue - I used the name 'sample' in my code here for the iterator
       # but it is also a column name in info_df, which makes this code normally not work
@@ -282,17 +283,24 @@ flip_y_angles <- function(df_to_flip) {
 
 get_positional_angle <- function(df_temp, octile_zips) {
   sample_names <- unique(df_temp$old_filename_generic_noside)
+  if (is.null(sample_names)) {
+    sample_names <- unique(df_temp$old_filename_generic_noside.x)
+  }
   for (image in 1:length(sample_names)) {
     octile_zip <- octile_zips %>% filter(str_starts(octile_zips[,1], sample_names[image]))
     if (length(octile_zip[[1]] != 0)) {
       octile_rois <- read.ijzip(file.path("./imagej_rois/overview_octiles/", octile_zip[[1]]), verbose = FALSE)
       octile_linestrings <- st_sfc(lapply(octile_rois, function(x) st_linestring(x$coords, dim="XY")))
       rows <- which(df_temp$old_filename_generic_noside == sample_names[image] & !is.na(df_temp$nuclei_centroidx_overview))
+      if (length(rows) == 0) {
+        rows <- which(df_temp$old_filename_generic_noside.x == sample_names[image] & !is.na(df_temp$nuclei_centroidx_overview))
+      }
       xmax <- attributes(octile_linestrings)$bbox[['xmax']]
       positional_angles <- data.frame(matrix(ncol=3, nrow=length(rows)))
       print(octile_zip[[1]])
       for (nuc_pair in 1:length(rows)) {
         row <- df_temp[rows[nuc_pair],]
+        # print(row)
         extended_line <- extend_line(row, xmax)
         # intersects gives list of number of intersections b/w extended line and each octile, 
         # the which gives the index for the octile that contains intersection
@@ -887,6 +895,14 @@ for (i in 1:length(levels(graphing_df$treatment))) {
   plot(treated_plot)
   dev.off()
   # dev.off()
+}
+
+## temp code
+for (i in 1:length(unique(filter_data$old_filename_generic_noside.x))) {
+  i = 6
+  further_filt <- filter_data %>% filter(old_filename_generic_noside.x == unique(filter_data$old_filename_generic_noside.x)[i])
+  plot(plot.windrose(further_filt %>% filter(side == 'contralateral'), 'white', dirres = 10))
+  plot(plot.windrose(further_filt %>% filter(side == 'treated'), 'red', dirres = 10))
 }
 
 for (i in 1:length(levels(graphing_df$treatment))) {
