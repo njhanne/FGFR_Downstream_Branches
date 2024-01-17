@@ -161,7 +161,7 @@ get_transform_matrices <- function(info_df, landmark_filenames) {
   info_df$old_filename_generic_noside <- str_remove_all(info_df$old_filename_generic, "_treated|_control")
   transformation_matrix <- NA
   samples <- unique(info_df$old_filename_generic_noside)
-  for (sample in 1:1) { #length(samples)) {
+  for (sample in 1:length(samples)) {
     matched_lm_files <- landmark_filenames %>% filter(str_starts(landmark_filenames, samples[sample]))
     if (nrow(matched_lm_files) == 3) {
       transformation_matrices <- compute_transform_matrices(matched_lm_files)
@@ -283,13 +283,14 @@ flip_y_angles <- function(df_to_flip) {
 get_positional_angle <- function(df_temp, octile_zips) {
   sample_names <- unique(df_temp$old_filename_generic_noside)
   for (image in 1:length(sample_names)) {
-    octile_zip <- octile_zips %>% filter(str_starts(octile_zips, sample_names[image]))
+    octile_zip <- octile_zips %>% filter(str_starts(octile_zips[,1], sample_names[image]))
     if (length(octile_zip[[1]] != 0)) {
       octile_rois <- read.ijzip(file.path("./imagej_rois/overview_octiles/", octile_zip[[1]]), verbose = FALSE)
       octile_linestrings <- st_sfc(lapply(octile_rois, function(x) st_linestring(x$coords, dim="XY")))
-      rows <- which(df_temp$old_filename_generic_noside == sample_names[image])
+      rows <- which(df_temp$old_filename_generic_noside == sample_names[image] & !is.na(df_temp$nuclei_centroidx_overview))
       xmax <- attributes(octile_linestrings)$bbox[['xmax']]
       positional_angles <- data.frame(matrix(ncol=3, nrow=length(rows)))
+      print(octile_zip[[1]])
       for (nuc_pair in 1:length(rows)) {
         row <- df_temp[rows[nuc_pair],]
         extended_line <- extend_line(row, xmax)
@@ -311,9 +312,7 @@ get_positional_angle <- function(df_temp, octile_zips) {
           # print('pause')
         }
         else {
-          print(octile_zip[[1]])
           print(nuc_pair)
-          print('make better rois')
           # p <- ggplot() + geom_sf(data = octile_linestrings, color = 'black') + geom_sf(data = extended_line)
         }
       }
@@ -502,7 +501,7 @@ plot.windrose <- function(data, dirres = 10, color, control) {
   p.windrose <- ggplot(data = T_data, aes(x = dir.binned, y = z, fill = color, color = color)) +
       geom_bar(width = 1, linewidth = .5, stat='identity') +
       scale_x_discrete(drop = FALSE, labels = waiver()) +
-      # scale_y_continuous(limits = c(0, 0.042), expand = c(0, 0),  breaks = c(0,.01,.02,.03,.04)) +
+      # scale_y_continuous(limits = c(0, 0.07), expand = c(0, 0)) + #,  breaks = c(0,.01,.02,.03,.04)) +
       coord_polar(start = ((270-(dirres/2))) * pi/180, direction = -1) +
       scale_fill_manual(name = "treated", values = color, drop = FALSE) +
       scale_color_manual(name = "treated", values = c('black','black'), drop = FALSE) +
@@ -526,7 +525,7 @@ plot.windrose <- function(data, dirres = 10, color, control) {
     p.windrose <- ggplot(data = data_new, aes(x = dir.binned, y = z, group=treatment, fill = treatment, color = treatment, alpha = treatment)) +
       geom_bar(width = 1, linewidth = .5, stat='identity',position='identity') +
       scale_x_discrete(drop = FALSE, labels = waiver()) +
-      scale_y_continuous(limits = c(0, 0.042), expand = c(0, 0),  breaks = c(0,.01,.02,.03,.04)) +
+      # scale_y_continuous(limits = c(0, 0.042), expand = c(0, 0),  breaks = c(0,.01,.02,.03,.04)) +
       coord_polar(start = ((270-(dirres/2))) * pi/180, direction = -1) +
       scale_fill_manual(name = "treatment", values = color, drop = FALSE) +
       scale_color_manual(name = "treatment", values = c('black','black'), drop = FALSE) +
@@ -753,9 +752,14 @@ df_baseline_masked$intersectionx <- NA
 df_baseline_masked$intersectiony <- NA
 df_baseline_masked <- get_positional_angle(df_baseline_masked, octile_filenames)
 df_baseline_masked$positional_angle <- as.numeric(df_baseline_masked$positional_angle)
+
+# adjust the angles 0-2pi and flip the treated side to match (it's opposite of above since they are already flipped from overview)
 df_baseline_masked <- df_baseline_masked %>% mutate(positional_angle = case_when(positional_angle > 2*pi ~ positional_angle - 2*pi,
                                                                                  positional_angle < 0 ~ angle + 2*pi,
                                                                                  TRUE ~ positional_angle))
+df_baseline_masked$positional_angle_old <- df_baseline_masked$positional_angle
+df_baseline_masked <- df_baseline_masked %>% mutate(positional_angle = case_when(side == 'treated' & positional_angle <= pi ~ pi-positional_angle, side == 'treated' & positional_angle > pi ~ 3*pi - positional_angle, TRUE ~ positional_angle_old))
+                                                    
 
 
 #### 3 Cellularity #### 
