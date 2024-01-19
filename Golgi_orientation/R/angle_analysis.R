@@ -199,14 +199,18 @@ compute_transform_matrices <- function(landmark_filenames) {
       treated_lms <- unlist(lapply(treated_lms, function(l) as.numeric(l$coords)), use.names = FALSE)
     }
   }
+  rotation_bool <- FALSE
+  if (str_detect(landmark_filenames[lm_zip,1], "U73122_GM130_d7")) {
+    rotation_bool <- TRUE
+  }
   
   contra_transform_matrix <- solve_transform_matrix_from_lms(B_full[1:4], contra_lms)
-  treated_transform_matrix <- solve_transform_matrix_from_lms(B_full[5:8], treated_lms)
+  treated_transform_matrix <- solve_transform_matrix_from_lms(B_full[5:8], treated_lms, rotation_bool)
   return(list(contra_transform_matrix, treated_transform_matrix))
 }
 
 
-solve_transform_matrix_from_lms <- function(overview_lms, stack_lms) {
+solve_transform_matrix_from_lms <- function(overview_lms, stack_lms, rotation =FALSE) {
   # need to do some matrix algebra here, but I think this should work
   # there shouldn't be any image rotation so we can solve with two landmarks
   # S is scale
@@ -236,10 +240,26 @@ solve_transform_matrix_from_lms <- function(overview_lms, stack_lms) {
                        stack_lms[3], 0, 1, 0,
                        0, stack_lms[4], 0, 1), 4, 4, byrow=TRUE)
   B <- overview_lms
-  M_vals <- solve(A, B)
-  M <- matrix(c(M_vals[1], 0, M_vals[3],
-                0, M_vals[2], M_vals[4],
-                0, 0, 1), 3, 3, byrow=TRUE)
+
+  
+  if (rotation) {
+    A <- matrix(c(0, stack_lms[2], 1, 0,
+                  -stack_lms[1], 0, 0, 1,
+                  0, stack_lms[4], 1, 0,
+                    -stack_lms[3], 0, 0, 1), 4, 4, byrow=TRUE)
+    M_vals <- solve(A,B)
+    
+    M <- matrix(c(0, M_vals[2], M_vals[4],
+                  -M_vals[1], 0, M_vals[3],
+                  0, 0, 1), 3, 3, byrow=TRUE)
+    
+    
+  } else {
+    M_vals <- solve(A, B)
+    M <- matrix(c(M_vals[1], 0, M_vals[3],
+                  0, M_vals[2], M_vals[4],
+                  0, 0, 1), 3, 3, byrow=TRUE)
+  }
   return(M)
 }
 
@@ -675,6 +695,8 @@ landmark_filenames <- data.frame(landmark_filenames)
 
 # this will save all the transform matrices as lists in the info_df
 info_df <- get_transform_matrices(info_df, landmark_filenames)
+
+
 df <- left_join(df, info_df %>% select(new_filename, old_filename_generic_noside) %>% distinct(), by=c('t' = 'new_filename'))
 
 # this will apply them to the actual xy data in the main df
@@ -767,7 +789,8 @@ df_baseline_masked <- df_baseline_masked %>% mutate(positional_angle = case_when
                                                                                  TRUE ~ positional_angle))
 df_baseline_masked$positional_angle_old <- df_baseline_masked$positional_angle
 df_baseline_masked <- df_baseline_masked %>% mutate(positional_angle = case_when(side == 'treated' & positional_angle <= pi ~ pi-positional_angle, side == 'treated' & positional_angle > pi ~ 3*pi - positional_angle, TRUE ~ positional_angle_old))
-                                                    
+
+saveRDS(df_baseline_masked, file='combined_angles_positional_masked.Rda') 
 
 
 #### 3 Cellularity #### 
@@ -870,6 +893,7 @@ WalraffTest(cdat,ndat,g,gID)
 graphing_df <- df_baseline_masked
 # graphing_df$angle_deg <- graphing_df$angle * 180 / pi
 graphing_df$angle_deg <- as.numeric(graphing_df$positional_angle) * (180 / pi)
+graphing_df <- graphing_df %>% drop_na(positional_angle)
 graphing_df$rel_z <- graphing_df$delta_z / graphing_df$distance
 graphing_df <- graphing_df %>% mutate(side_spd = case_when(side == 'control' ~ 0,
                                                            side == 'treated' ~ 1))
@@ -879,6 +903,7 @@ graphing_df$treatment <- factor(graphing_df$treatment, levels = c('DMSO', 'U0126
 graphing_df <- graphing_df %>% mutate(treatment = recode(treatment, '3Mix' = 'Triple'))
 graphing_df$side <- factor(graphing_df$side, levels = c('control', 'treated'))
 graphing_df <- graphing_df %>% mutate(side = recode(side, 'control' = 'contralateral'))
+
 for (i in 1:length(levels(graphing_df$treatment))) {
   filter_data <- graphing_df %>% filter(as.integer(treatment) == i)
   
@@ -909,14 +934,14 @@ for (i in 1:length(levels(graphing_df$treatment))) {
   filter_data <- graphing_df %>% filter(as.integer(treatment) == i)
   
   # png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_control_vsDMSO.png"), units='in', width=5, height=5, res=300)
-  pdf(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_contralateral_vsDMSO.pdf"), width=5, height=5)
+  pdf(paste0("./figs/positional_windrose_", as.character(filter_data$treatment[1]), "_contralateral_vsDMSO.pdf"), width=5, height=5)
   control_plot <- plot.windrose(filter_data %>% filter(side == 'contralateral'), c('white', 'grey'), dirres = 10, graphing_df %>% filter(treatment == 'DMSO'))
   plot(control_plot)
   dev.off()
   # dev.off()
   
   # png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_treated_vsDMSO.png"), units='in', width=5, height=5, res=300)
-  pdf(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_treated_vsDMSO.pdf"), width=5, height=5)
+  pdf(paste0("./figs/positional_windrose_", as.character(filter_data$treatment[1]), "_treated_vsDMSO.pdf"), width=5, height=5)
   treated_plot <- plot.windrose(filter_data %>% filter(side == 'treated'), c('red', 'grey'), dirres = 10, graphing_df %>% filter(treatment == 'DMSO'))
   plot(treated_plot)
   dev.off()
