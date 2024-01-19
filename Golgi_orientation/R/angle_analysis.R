@@ -243,6 +243,8 @@ solve_transform_matrix_from_lms <- function(overview_lms, stack_lms, rotation =F
 
   
   if (rotation) {
+    # only one image is rotated. I have to make a different transform matrix
+    # luckily the rotation is 90 degrees so the transform is not too complicated
     A <- matrix(c(0, stack_lms[2], 1, 0,
                   -stack_lms[1], 0, 0, 1,
                   0, stack_lms[4], 1, 0,
@@ -252,8 +254,6 @@ solve_transform_matrix_from_lms <- function(overview_lms, stack_lms, rotation =F
     M <- matrix(c(0, M_vals[2], M_vals[4],
                   -M_vals[1], 0, M_vals[3],
                   0, 0, 1), 3, 3, byrow=TRUE)
-    
-    
   } else {
     M_vals <- solve(A, B)
     M <- matrix(c(M_vals[1], 0, M_vals[3],
@@ -553,7 +553,7 @@ plot.windrose <- function(data, dirres = 10, color, control) {
     p.windrose <- ggplot(data = data_new, aes(x = dir.binned, y = z, group=treatment, fill = treatment, color = treatment, alpha = treatment)) +
       geom_bar(width = 1, linewidth = .5, stat='identity',position='identity') +
       scale_x_discrete(drop = FALSE, labels = waiver()) +
-      # scale_y_continuous(limits = c(0, 0.042), expand = c(0, 0),  breaks = c(0,.01,.02,.03,.04)) +
+      scale_y_continuous(limits = c(0, 0.097), expand = c(0, 0),  breaks = c(0,.025,.05,.075,.1)) +
       coord_polar(start = ((270-(dirres/2))) * pi/180, direction = -1) +
       scale_fill_manual(name = "treatment", values = color, drop = FALSE) +
       scale_color_manual(name = "treatment", values = c('black','black'), drop = FALSE) +
