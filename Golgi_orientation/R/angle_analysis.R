@@ -895,7 +895,27 @@ WalraffTest(cdat,ndat,g,gID)
 # analysis of group differences. I will get relative amount in each quadrant
 # and compare to contralateral and DMSO groups
 df_baseline_masked <- df_baseline_masked  %>% mutate(quad_bin = cut(positional_angle, breaks = c(0, pi/2, pi, 3*pi/2, 2*pi)))
-bin_summary <- df_baseline_masked %>% group_by(sample_info, treatment, side) %>% drop_na(quad_bin) %>% count(quad_bin)
+bin_summary <- df_baseline_masked %>% group_by(sample_info, treatment, side) %>% drop_na(quad_bin) %>% count(quad_bin) %>% mutate(freq = n / sum(n))
+group_bin_summary <- bin_summary %>% group_by(treatment, side, quad_bin) %>% dplyr::summarize(mean_freq = mean(freq))
+
+for (quadrant in 1:length(levels(bin_summary$quad_bin))) {
+  group_bin_summary_quad <- group_bin_summary %>% filter(quad_bin == levels(group_bin_summary$quad_bin)[quadrant])
+  bin_summary_quad <- bin_summary %>% filter(quad_bin == levels(group_bin_summary$quad_bin)[quadrant])
+  
+  # pdf(paste0("./figs/positional_avg", as.character(levels(group_bin_summary$quad_bin)[quadrant]), "_contralateral.pdf"), width=10, height=6)
+  # p <- ggplot() + geom_bar(data = group_bin_summary_quad, aes(y=mean_freq, x = side), stat="identity") +
+  #   geom_jitter(data = bin_summary_quad, aes(x = side, y = freq), shape=16) +
+  #   # geom_errorbar(data = cellpose_summarise, aes(y=mean,x=side,ymin=mean-sd,ymax=mean+sd)) +
+  #   facet_wrap(~ treatment)
+  # print(p)
+  # dev.off()
+  
+  test<- aov(bin_summary_quad$freq ~  bin_summary_quad$treatment * bin_summary_quad$side)
+  print(as.character(levels(group_bin_summary$quad_bin)[quadrant]))
+  print(summary(test))
+  print(TukeyHSD(test))
+}
+
 
 
 #### 6 Windrose plotting ####
