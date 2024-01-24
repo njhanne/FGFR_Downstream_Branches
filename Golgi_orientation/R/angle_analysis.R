@@ -677,6 +677,7 @@ getwd() #check our working directory
 # This step can take a long time! More than a minute
 # if you've run it before then just load the combined data here
 df <- readRDS("combined_angles.Rda")
+df_baseline_masked <- readRDS('combined_angles_positional_masked.Rda') 
 # else you generate them again here and then
 # save the combined dataset for faster loading next time
 df <- compile_angle_df() # this will take a while! be patient
@@ -749,7 +750,7 @@ baseline_mask_filenames <- list.files(path="./imagej_rois/baseline_rois/", patte
 df_baseline_masked <- filter_baseline_distance(baseline_mask_filenames, df_masked, 200, FALSE)
 
 
-#### 2 Region 'Aiming' Analysis ####
+#### 2 Region 'aiming' analysis ####
 ### Instead of using the angle b/w the nuclei and Golgi we will make a pseudo-angle 
 ### based on what boundary part of the tissue the angle is pointing at
 # This means that a cell in the edge of globular process pointing 'left' at base of
@@ -889,7 +890,15 @@ gID <- as.integer(as.factor(cellpose_DMSO_control$id))
 WalraffTest(cdat,ndat,g,gID)
 
 
-#### 5 Windrose plotting ####
+#### 5 Quadrant comparison and plotting ####
+# The windrose plots look good, but it would be nice to get a more quantitative
+# analysis of group differences. I will get relative amount in each quadrant
+# and compare to contralateral and DMSO groups
+df_baseline_masked <- df_baseline_masked  %>% mutate(quad_bin = cut(positional_angle, breaks = c(0, pi/2, pi, 3*pi/2, 2*pi)))
+bin_summary <- df_baseline_masked %>% group_by(sample_info, treatment, side) %>% drop_na(quad_bin) %>% count(quad_bin)
+
+
+#### 6 Windrose plotting ####
 graphing_df <- df_baseline_masked
 # graphing_df$angle_deg <- graphing_df$angle * 180 / pi
 graphing_df$angle_deg <- as.numeric(graphing_df$positional_angle) * (180 / pi)
@@ -949,7 +958,7 @@ for (i in 1:length(levels(graphing_df$treatment))) {
 }
 
 
-#### 6 Mollweide Plots ####
+#### 7 Mollweide Plots ####
 df_3d_proj <- df_baseline_masked
 df_3d_proj$lat <- (pi/2 - acos(df_3d_proj$unit_z))*180/pi
 df_3d_proj$lon <- df_3d_proj$angle*180/pi + 270
