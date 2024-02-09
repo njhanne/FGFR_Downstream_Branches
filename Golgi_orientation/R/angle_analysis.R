@@ -291,9 +291,10 @@ transform_centroids_xy <- function(temp_df, info_df) {
 flip_y_angles <- function(df_to_flip) {
   df_flipped_control <- df_to_flip %>% filter((treatment == 'LY' & side_num == 1) |  (treatment != 'LY' & side_num == 0))
   df_flipped_control <- df_flipped_control %>% mutate(angle = case_when(angle <= pi ~ pi-angle, angle > pi ~ 3*pi - angle))
-  if ('angle_old' %in% names(df_flipped_control)) {
-    df_flipped_control <- df_flipped_control %>% mutate(angle_old = case_when(angle_old <= pi ~ pi-angle_old, angle_old > pi ~ 3*pi - angle_old))
-  }
+  # I don't think we want to flip the 'old' angles since they are now used for positional angle
+  # if ('angle_old' %in% names(df_flipped_control)) {
+  #   df_flipped_control <- df_flipped_control %>% mutate(angle_old = case_when(angle_old <= pi ~ pi-angle_old, angle_old > pi ~ 3*pi - angle_old))
+  # }
   
   df_original_control <- df_to_flip %>% filter((treatment != 'LY' & side_num == 1) |  (treatment == 'LY' & side_num == 0))
   df_flipped_control <- rbind(df_flipped_control, df_original_control)
@@ -367,7 +368,7 @@ distance_along_octile <- function(linestrings, extended_line, linestring_i) {
   # like it will be much simpler!
   
   # putting the first element here in case it hits two octiles. This could maybe happen
-  # near boundaries, and they should be clsoe enough together that the angle
+  # near boundaries, and they should be close enough together that the angle
   # will be nearly the same anyway.
   intersected_point <- st_intersection(linestrings[linestring_i], extended_line)
   intersected_point <- st_cast(intersected_point, 'POINT')[1]
@@ -377,6 +378,38 @@ distance_along_octile <- function(linestrings, extended_line, linestring_i) {
   ratio <- pi/4 - (length_table$Length[2] / (length_table$Length[1]+length_table$Length[2]) * pi/4)
   ratio <- pi + pi/4*(linestring_i-1) + ratio
   return(c(ratio,intersected_point))
+}
+
+
+positional_angle_to_xy <- function(linestrings, pos_angle) {
+  # this is basically the inverse of the 'distance along octile' function
+  # we want to get the xy position in a linestring from the angle
+  # https://stackoverflow.com/a/77688302
+  
+  # this is a bit obfuscated - the positional angle plus pi rotates it cw so '0' is 180
+  # but now all the 180-360 will be 360-540, so we modulo with a full circle 
+  # so that they will be 0-180 instead. Divide by pi/4 (1/8 of circle) to get the octile
+  # and floor it so it's an integer not a float, then add 1 since it is 1-8 not 0-7
+  linestring_i <- floor(((pos_angle+pi) %% (2*pi)) / (pi/4)) + 1
+  
+  ratio <- (pos_angle %% (pi/4)) / (pi/4)
+  (pt <- st_linesubstring(big_overview_linestrings[linestring_i], from = 0, to = ratio) %>% st_endpoint())
+  return(pt)
+}
+
+
+convert_directional_angle_overview <- function(df_temp, linestrings) {
+  df_temp$overview_intersectionx <- NA
+  df_temp$overview_intersectiony <- NA
+  rows <- nrow(df_temp)
+  for (row in 1:range(rows)) {
+    if (!is.na(df_temp[row,]$positional_angle)) {
+      pt_temp <- positional_angle_to_xy(linestrings, df_temp[row,]$positional_angle)
+      df_temp[row,]$overview_intersectionx <- pt_temp[[1]][1]
+      df_temp[row,]$overview_intersectiony <- pt_temp[[1]][2]
+    }
+  }
+  return(df_temp)
 }
 
 
@@ -668,6 +701,8 @@ get_posterior_estimates <- function(fitted) {
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 getwd() #check our working directory
 setwd("../../data/GM130")
+# if at work...
+setwd("C:/Users/nhanne/Box/FGF_inhibitor_paper_5-26-2020/data/GM130")
 getwd() #check our working directory
 # if you aren't using rstudio, use the command setwd() 
 # and point it to the data/GM130 directory
@@ -745,6 +780,7 @@ df_masked <- mask_out_centroids(df, mask_filenames, FALSE)
 # We will only look at nuclei-Golgi pairs that are within 200 um of this line
 # Basically we don't want to analyze pairs that are more in the mid-FNP or too 
 # close to the neural ectoderm
+# I think I want to get rid of this for now...
 baseline_mask_filenames <- list.files(path="./imagej_rois/baseline_rois/", pattern=".roi$")
 # this is another slow one, be patient
 df_baseline_masked <- filter_baseline_distance(baseline_mask_filenames, df_masked, 200, FALSE)
@@ -778,20 +814,25 @@ octile_filenames <- list.files(path="./imagej_rois/overview_octiles/", pattern="
 octile_filenames <- data.frame(octile_filenames)
 
 # this is quite slow
-df_baseline_masked$positional_angle <- NA
-df_baseline_masked$intersectionx <- NA
-df_baseline_masked$intersectiony <- NA
-df_baseline_masked <- get_positional_angle(df_baseline_masked, octile_filenames)
-df_baseline_masked$positional_angle <- as.numeric(df_baseline_masked$positional_angle)
+df_masked$positional_angle <- NA
+df_masked$intersectionx <- NA
+df_masked$intersectiony <- NA
+df_masked <- get_positional_angle(df_masked, octile_filenames)
+df_masked$positional_angle <- as.numeric(df_masked$positional_angle)
 
 # adjust the angles 0-2pi and flip the treated side to match (it's opposite of above since they are already flipped from overview)
-df_baseline_masked <- df_baseline_masked %>% mutate(positional_angle = case_when(positional_angle > 2*pi ~ positional_angle - 2*pi,
+df_masked <- df_masked %>% mutate(positional_angle = case_when(positional_angle > 2*pi ~ positional_angle - 2*pi,
                                                                                  positional_angle < 0 ~ angle + 2*pi,
                                                                                  TRUE ~ positional_angle))
-df_baseline_masked$positional_angle_old <- df_baseline_masked$positional_angle
-df_baseline_masked <- df_baseline_masked %>% mutate(positional_angle = case_when(side == 'treated' & positional_angle <= pi ~ pi-positional_angle, side == 'treated' & positional_angle > pi ~ 3*pi - positional_angle, TRUE ~ positional_angle_old))
 
-saveRDS(df_baseline_masked, file='combined_angles_positional_masked.Rda') 
+# need to transform the centroids again here to the overview octile image
+
+
+
+df_masked$positional_angle_old <- df_masked$positional_angle
+df_masked <- df_masked %>% mutate(positional_angle = case_when(side == 'treated' & positional_angle <= pi ~ pi-positional_angle, side == 'treated' & positional_angle > pi ~ 3*pi - positional_angle, TRUE ~ positional_angle_old))
+
+saveRDS(df_masked, file='combined_angles_positional_masked.Rda') 
 
 
 #### 3 Cellularity #### 
