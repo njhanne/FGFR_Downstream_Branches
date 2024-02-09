@@ -18,6 +18,7 @@ library(stringr)
 library(RImageJROI)
 library(sf)
 library(sfnetworks)
+library(lwgeom)
 
 # needed for 'globe' plots
 library(terra)
@@ -156,16 +157,14 @@ filter_baseline_distance <- function(baseline_mask_filenames, df, distance=200, 
 }
 
 
-get_transform_matrices <- function(info_df, landmark_filenames) {
-  info_df$old_filename_generic <- str_remove_all(info_df$old_filename, "_nuc.tif|_gm130.tif")
-  info_df$old_filename_generic_noside <- str_remove_all(info_df$old_filename_generic, "_treated|_control")
+get_transform_matrices_from_rois <- function(info_df, landmark_filenames) {
   transformation_matrix <- NA
   samples <- unique(info_df$old_filename_generic_noside)
   for (sample in 1:length(samples)) {
     matched_lm_files <- landmark_filenames %>% filter(str_starts(landmark_filenames, samples[sample]))
     if (nrow(matched_lm_files) == 3) {
       print(matched_lm_files[1])
-      transformation_matrices <- compute_transform_matrices(matched_lm_files)
+      transformation_matrices <- compute_transform_matrices_from_rois(matched_lm_files)
       # this is actually an interesting issue - I used the name 'sample' in my code here for the iterator
       # but it is also a column name in info_df, which makes this code normally not work
       # the fix (if you don't want to rename the variable, which I probably should) is below with the .env$
@@ -181,7 +180,7 @@ get_transform_matrices <- function(info_df, landmark_filenames) {
 }
 
 
-compute_transform_matrices <- function(landmark_filenames) {
+compute_transform_matrices_from_rois <- function(landmark_filenames) {
   # first load in the three landmark zips
   for (lm_zip in 1:nrow(landmark_filenames)) {
     if (str_detect(landmark_filenames[lm_zip,1], "overview")) {
@@ -267,24 +266,20 @@ solve_transform_matrix_from_lms <- function(overview_lms, stack_lms, rotation =F
 transform_centroids_xy <- function(temp_df, info_df) {
   # continuing the matrix algebra from above:
   # [x',y',1] =  M * [x, y, 1]
+  centroids_df <- data.frame(matrix(NA, nrow = nrow(temp_df), ncol = 2))
   for (image in 1:nrow(info_df)) {
     if (!is.na(info_df[image,]$transformation_matrix)) {
       rows <- which(temp_df$t == info_df[image,]$new_filename)
       M_vals <- info_df[image,]$transformation_matrix
       #pull out the centroids and add the column of 1 to the end for matrix multiplication
-      nuc_centroids <- temp_df[rows,] %>% select(nuclei_centroidx, nuclei_centroidy) %>% mutate(one_col = 1)
-      golgi_centroids <- temp_df[rows,] %>% select(GM130_centroidx, GM130_centroidy) %>% mutate(one_col = 1)
+      centroids <- temp_df[rows,2:3] %>% mutate(one_col = 1)
       # %*% is matrix multiplication, the t in beginning transposes the results to be in columns instead of rows, the 1 tells it to go row-wise
-      transformed_nuc_centroids <- t(apply(nuc_centroids, 1, function (x) M_vals[[1]] %*% as.numeric(x)))
-      transformed_golgi_centroids <- t(apply(golgi_centroids, 1, function (x) M_vals[[1]] %*% as.numeric(x)))
-      # save them, this is MUCH faster than dplyr for some reason
-      temp_df[rows,]$nuclei_centroidx_overview <- transformed_nuc_centroids[,1]
-      temp_df[rows,]$nuclei_centroidy_overview <- transformed_nuc_centroids[,2]
-      temp_df[rows,]$GM130_centroidx_overview <- transformed_golgi_centroids[,1]
-      temp_df[rows,]$GM130_centroidy_overview <- transformed_golgi_centroids[,2]
+      transformed_centroids <- t(apply(centroids, 1, function (x) M_vals[[1]] %*% as.numeric(x)))
+      centroids_df[rows,1] <- transformed_centroids[,1]
+      centroids_df[rows,2] <- transformed_centroids[,2]
     }
   }
-  return(temp_df)
+  return(centroids_df)
 }
 
 
@@ -386,6 +381,9 @@ positional_angle_to_xy <- function(linestrings, pos_angle) {
   # we want to get the xy position in a linestring from the angle
   # https://stackoverflow.com/a/77688302
   
+  # would this be better as just a lookup table? IDK
+  # check 'approx()' function. This code is slow af
+  
   # this is a bit obfuscated - the positional angle plus pi rotates it cw so '0' is 180
   # but now all the 180-360 will be 360-540, so we modulo with a full circle 
   # so that they will be 0-180 instead. Divide by pi/4 (1/8 of circle) to get the octile
@@ -393,15 +391,19 @@ positional_angle_to_xy <- function(linestrings, pos_angle) {
   linestring_i <- floor(((pos_angle+pi) %% (2*pi)) / (pi/4)) + 1
   
   ratio <- (pos_angle %% (pi/4)) / (pi/4)
-  (pt <- st_linesubstring(big_overview_linestrings[linestring_i], from = 0, to = ratio) %>% st_endpoint())
+  (pt <- st_linesubstring(linestrings[linestring_i], from = 0, to = ratio) %>% st_endpoint())
   return(pt)
 }
 
 
-convert_directional_angle_overview <- function(df_temp, linestrings) {
+convert_directional_angle_overview <- function(df_temp, linestring_zip) {
   df_temp$overview_intersectionx <- NA
   df_temp$overview_intersectiony <- NA
   rows <- nrow(df_temp)
+  
+  overview_rois <- read.ijzip(file.path("./imagej_rois/overview_octiles/", linestring_zip), verbose = FALSE)
+  linestrings <- st_sfc(lapply(overview_rois, function(x) st_linestring(x$coords, dim="XY")))
+  
   for (row in 1:range(rows)) {
     if (!is.na(df_temp[row,]$positional_angle)) {
       pt_temp <- positional_angle_to_xy(linestrings, df_temp[row,]$positional_angle)
@@ -410,6 +412,49 @@ convert_directional_angle_overview <- function(df_temp, linestrings) {
     }
   }
   return(df_temp)
+}
+
+
+compute_transform_matrices_from_ois_angles <- function(landmark_filenames) {
+  # first find two sets of points
+  # figure out some min_distance
+  found_matches <- FALSE
+  while (!found_matches) {
+    pair = sample.int(nrow(temp_df), 2)
+    distance = sqrt((temp_df[pair[1],]$overview_intersectionx - temp_df[pair[2],]$overview_intersectionx)^2 +
+                    (temp_df[pair[1],]$overview_intersectiony - temp_df[pair[2],]$overview_intersectiony)^2)
+    if (distance >= min_dist) {
+      found_matches <- TRUE
+    }  
+  }
+  
+  rotation_bool <- FALSE
+  if (str_detect(landmark_filenames[lm_zip,1], "U73122_GM130_d7")) {
+    rotation_bool <- TRUE
+  }
+  contra_transform_matrix <- solve_transform_matrix_from_lms(B_full[1:4], contra_lms)
+  treated_transform_matrix <- solve_transform_matrix_from_lms(B_full[5:8], treated_lms, rotation_bool)
+  return(list(contra_transform_matrix, treated_transform_matrix))
+}
+
+
+get_overview_transform_matrices_from_pos_angles <- function(info_df, overview_linestrings, temp_df) {
+  transformation_matrix <- NA
+  samples <- unique(info_df$old_filename_generic_noside)
+  for (sample in 1:length(samples)) {
+    transformation_matrices <- compute_transform_matrix_from_pos_angles()
+    matched_lm_files <- landmark_filenames %>% filter(str_starts(landmark_filenames, samples[sample]))
+    # this is actually an interesting issue - I used the name 'sample' in my code here for the iterator
+    # but it is also a column name in info_df, which makes this code normally not work
+    # the fix (if you don't want to rename the variable, which I probably should) is below with the .env$
+    info_df <- info_df %>% mutate(overview_transformation_matrix = ifelse(old_filename_generic_noside == samples[.env$sample]
+                                                                   & side == 'control', I(list(transformation_matrices[[1]])), 
+                                                                   transformation_matrix))
+    info_df <- info_df %>% mutate(overview_transformation_matrix = ifelse(old_filename_generic_noside == samples[.env$sample]
+                                                                   & side == 'treated', I(list(transformation_matrices[[2]])), 
+                                                                   transformation_matrix))
+  }
+  return(info_df)
 }
 
 
@@ -712,7 +757,7 @@ getwd() #check our working directory
 # This step can take a long time! More than a minute
 # if you've run it before then just load the combined data here
 df <- readRDS("combined_angles.Rda")
-df_baseline_masked <- readRDS('combined_angles_positional_masked.Rda') 
+df_masked <- readRDS('combined_angles_positional_masked.Rda') 
 # else you generate them again here and then
 # save the combined dataset for faster loading next time
 df <- compile_angle_df() # this will take a while! be patient
@@ -730,7 +775,9 @@ landmark_filenames <- list.files(path="./imagej_rois/overview_landmarks/", patte
 landmark_filenames <- data.frame(landmark_filenames)
 
 # this will save all the transform matrices as lists in the info_df
-info_df <- get_transform_matrices(info_df, landmark_filenames)
+info_df$old_filename_generic <- str_remove_all(info_df$old_filename, "_nuc.tif|_gm130.tif")
+info_df$old_filename_generic_noside <- str_remove_all(info_df$old_filename_generic, "_treated|_control")
+info_df <- get_transform_matrices_from_rois(info_df, landmark_filenames)
 
 
 df <- left_join(df, info_df %>% select(new_filename, old_filename_generic_noside) %>% distinct(), by=c('t' = 'new_filename'))
@@ -740,7 +787,14 @@ df$nuclei_centroidx_overview <- NA
 df$nuclei_centroidy_overview <- NA
 df$GM130_centroidx_overview <- NA
 df$GM130_centroidy_overview <- NA
-df <- transform_centroids_xy(df, info_df)
+
+transformed_centroids <- transform_centroids_xy(df %>% select(t, nuclei_centroidx, nuclei_centroidy), info_df)
+df$nuclei_centroidx_overview <- transformed_centroids[,1]
+df$nuclei_centroidy_overview <- transformed_centroids[,2]
+
+transformed_centroids <- transform_centroids_xy(df %>% select(t, GM130_centroidx, GM130_centroidy), info_df)
+df$GM130_centroidx_overview <- transformed_centroids[,1]
+df$GM130_centroidy_overview <- transformed_centroids[,2]
 
 
 ### Correct angles on any images that are not 'square'
@@ -813,21 +867,28 @@ df_baseline_masked <- filter_baseline_distance(baseline_mask_filenames, df_maske
 octile_filenames <- list.files(path="./imagej_rois/overview_octiles/", pattern=".zip$", recursive=TRUE)
 octile_filenames <- data.frame(octile_filenames)
 
-# this is quite slow
+# this is quite slow, gets the positional angles
 df_masked$positional_angle <- NA
 df_masked$intersectionx <- NA
 df_masked$intersectiony <- NA
 df_masked <- get_positional_angle(df_masked, octile_filenames)
 df_masked$positional_angle <- as.numeric(df_masked$positional_angle)
 
+# This puts the positional angles onto the main 'overview' cartoon
+overview_octile_rois <- octile_filenames %>% filter(octile_filenames == 'overview_octile.zip')
+df_masked <- convert_directional_angle_overview(df_masked, overview_octile_rois)
+
+# need to transform the centroids again here to the overview octile image
+# 1 pick two positional angles and use them to re-calculate rotation matrices
+info_df <- get_overview_transform_matrices_from_pos_angles(info_df, overview_octile_rois, df_masked)
+
+# 2 apply rotation matrix
+
+
 # adjust the angles 0-2pi and flip the treated side to match (it's opposite of above since they are already flipped from overview)
 df_masked <- df_masked %>% mutate(positional_angle = case_when(positional_angle > 2*pi ~ positional_angle - 2*pi,
                                                                                  positional_angle < 0 ~ angle + 2*pi,
                                                                                  TRUE ~ positional_angle))
-
-# need to transform the centroids again here to the overview octile image
-
-
 
 df_masked$positional_angle_old <- df_masked$positional_angle
 df_masked <- df_masked %>% mutate(positional_angle = case_when(side == 'treated' & positional_angle <= pi ~ pi-positional_angle, side == 'treated' & positional_angle > pi ~ 3*pi - positional_angle, TRUE ~ positional_angle_old))
