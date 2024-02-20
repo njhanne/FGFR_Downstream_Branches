@@ -862,9 +862,9 @@ df_masked <- mask_out_centroids(df, mask_filenames, FALSE)
 # Basically we don't want to analyze pairs that are more in the mid-FNP or too 
 # close to the neural ectoderm
 # I think I want to get rid of this for now...
-baseline_mask_filenames <- list.files(path="./imagej_rois/baseline_rois/", pattern=".roi$")
+# baseline_mask_filenames <- list.files(path="./imagej_rois/baseline_rois/", pattern=".roi$")
 # this is another slow one, be patient
-df_baseline_masked <- filter_baseline_distance(baseline_mask_filenames, df_masked, 200, FALSE)
+# df_baseline_masked <- filter_baseline_distance(baseline_mask_filenames, df_masked, 200, FALSE)
 
 
 #### 2 Region 'aiming' analysis ####
@@ -907,11 +907,82 @@ overview_pos_LUT <- generate_overview_positional_LUT(overview_octile_rois)
 df_masked <- convert_directional_angle_overview_LUT(df_masked, overview_pos_LUT)
 
 
+
 # need to transform the centroids again here to the overview octile image
 # 1 pick two positional angles and use them to re-calculate rotation matrices
 # this isn't great, but it gets us closer at least
 # the warp will get the rest of the way
 info_df <- get_overview_transform_matrices_from_pos_angles(info_df, df_masked, 100)
+
+dummy_df <- df_masked %>% filter(old_filename_generic_noside == '20230414_DMSO_a3')
+
+pull_rows <- as.integer(seq(from=1, to=nrow(dummy_df %>% na.omit(positional_angle)), length.out=100))
+landmarks <- dummy_df %>% arrange(positional_angle) %>% na.omit(positional_angle) %>% slice(pull_rows) %>% select(positional_angle, intersectionx, intersectiony)
+landmarks$referencex <- approx(overview_pos_LUT$pos_angle, overview_pos_LUT$overview_x, xout = landmarks$positional_angle)$y
+landmarks$referencey <- approx(overview_pos_LUT$pos_angle, overview_pos_LUT$overview_y, xout = landmarks$positional_angle)$y
+
+
+rotateM <- getTrafo4x4(rotonto(data.matrix(landmarks[4:5]), data.matrix(landmarks[2:3]), scale=TRUE))
+centered_pts <- applyTransform(data.matrix(landmarks[2:3]), rotateM)
+# make TPS
+morphM <- computeTransform(data.matrix(landmarks[4:5]), centered_pts, type='tps')
+# apply warp
+rot_pts <- applyTransform(data.matrix(dummy_df[26:27]), rotateM)
+morphed_pts <- applyTransform(rot_pts, morphM)
+dummy_df$morphedx <- morphed_pts[,1]
+dummy_df$morphedy <- morphed_pts[,2]
+
+dummy_df_both <- dummy_df
+dummy_df <- dummy_df_both %>% filter(side == 'control' & morphedy > 90  & morphedx < 50) 
+mean_df <- data.frame()
+for (angle_i in 1:360) {
+  angle <- angle_i * pi/180
+  mean_df[angle_i,1] <- angle
+  if (angle_i - 2.5 < 0) {
+    angle_mean <- (dummy_df %>% filter(between(positional_angle, (angle_i + 360 - 2.5)*pi/180, 2*pi) | between(positional_angle, 0, (angle_i+2.5)*pi/180)) %>% count()) / 5
+  } else if (angle_i + 2.5 > 360) {
+    angle_mean <- (dummy_df %>% filter(between(positional_angle, (angle_i - 2.5)*pi/180, 2*pi) | between(positional_angle, 0, (angle_i+2.5 - 360)*pi/180)) %>% count()) / 5
+  } else {
+    angle_mean <- (dummy_df %>% filter(between(positional_angle, (angle_i - 2.5)*pi/180, (angle_i+2.5)*pi/180)) %>% count()) / 5
+  }
+  mean_df[angle_i,2] <- angle_mean
+  mean_df[angle_i,3] <- approx(overview_pos_LUT$pos_angle, overview_pos_LUT$overview_x, xout = angle)$y*-1
+  mean_df[angle_i,4] <- approx(overview_pos_LUT$pos_angle, overview_pos_LUT$overview_y, xout = angle)$y*-1
+}
+
+test_pts <- st_as_sf(mean_df, coords = c("V3","V4"), remove = FALSE)
+ggplot(test_pts) + geom_point(data=dummy_df_both, aes(x = morphedx*-1, y = morphedy*-1), stroke=0, shape=21, color='black', alpha=.25) +
+  geom_point(data=dummy_df, aes(x = morphedx*-1, y = morphedy*-1), color='black') +
+  geom_sf(aes(color = n/nrow(dummy_df)*100, size = n/nrow(dummy_df)*100)) + 
+  scale_colour_viridis_c(option = 'inferno') + scale_fill_gradient()
+
+
+get_octile_endpoint_network <- function(octile_filename) {
+  # load up the overview octile, make the rois into linestrings
+  octile_rois <- read.ijzip(file.path("./imagej_rois/overview_octiles/", octile_filename), verbose = FALSE)
+  octile_linestrings <- st_sfc(lapply(octile_rois, function(x) st_linestring(x$coords, dim="XY")))
+  
+  # pull out the roi endpoing only, we don't want the first point as they are same as endpoint
+  octile_endpoints <- lapply(octile_linestrings, function(x) tail(st_coordinates(x), 1)[1:2])
+  # find all combinations of these endpoint pairs
+  combinations <- combn(1:length(octile_endpoints), 2)
+  # make linestrings from each combination
+  octile_endpoint_mesh <- st_sfc(mapply(function(x) st_linestring(c(st_point(c(octile_endpoints[[combinations[,x][1]]][1], octile_endpoints[[combinations[,x][1]]][2])), 
+                                                                    st_point(c(octile_endpoints[[combinations[,x][2]]][1], octile_endpoints[[combinations[,x][2]]][2]))), dim="XY"), 1:ncol(combinations), SIMPLIFY = FALSE))
+  # make it into a network
+  octile_endpoint_network <- as_sfnetwork(octile_endpoint_mesh)
+  # find all the points where the lines intersect and make them into points
+  intersection_ps <- st_collection_extract(st_intersection(octile_endpoint_mesh), "POINT")
+  # # add these points back into the network, which will remake the lines
+  octile_endpoint_network <- st_network_blend(octile_endpoint_network, intersection_ps)
+  return(octile_endpoint_network)
+}
+
+sample_net <- get_octile_endpoint_network(octile_filenames[1,])
+reference_net <- get_octile_endpoint_network(octile_filenames[26,])
+
+# The edges are not connected.
+as_sfnetwork(edges)
 
 # 2 apply rotation matrix, this will do linear transformation of the data to the reference overview
 # we will need to do a thin plate spline warp to get it really aligned after
@@ -1057,12 +1128,36 @@ WalraffTest(cdat,ndat,g,gID)
 # analysis of group differences. I will get relative amount in each quadrant
 # and compare to contralateral and DMSO groups
 df_baseline_masked <- df_baseline_masked  %>% mutate(quad_bin = cut(positional_angle, breaks = c(0, pi/2, pi, 3*pi/2, 2*pi)))
+df_baseline_masked <- df_baseline_masked  %>% mutate(treatment = factor(treatment, levels = c('DMSO', 'U0126', 'LY294002', 'U73122', '3Mix')))
 bin_summary <- df_baseline_masked %>% group_by(sample_info, treatment, side) %>% drop_na(quad_bin) %>% count(quad_bin) %>% mutate(freq = n / sum(n))
 group_bin_summary <- bin_summary %>% group_by(treatment, side, quad_bin) %>% dplyr::summarize(mean_freq = mean(freq))
 
 for (quadrant in 1:length(levels(bin_summary$quad_bin))) {
   group_bin_summary_quad <- group_bin_summary %>% filter(quad_bin == levels(group_bin_summary$quad_bin)[quadrant])
   bin_summary_quad <- bin_summary %>% filter(quad_bin == levels(group_bin_summary$quad_bin)[quadrant])
+  
+  graph_mean_df <- bin_summary_quad %>% group_by(treatment, side) %>%  summarise(
+    y0 = quantile(freq, 0.05),
+    y25 = quantile(freq, 0.25),
+    y50 = mean(freq),
+    y75 = quantile(freq, 0.75),
+    y100 = quantile(freq, 0.95),
+    ysd = sd(freq))
+  
+  p <- ggplot(data=graph_mean_df, aes(treatment, y50, fill = as.factor(side))) +
+    geom_col(stat = "identity", position = 'dodge') +
+    geom_errorbar(aes(ymin=y50, ymax=y50+ysd), position = 'dodge', width = 1) +
+    geom_point(data=bin_summary_quad, aes(treatment, freq, fill=side), size = 1, position=position_jitterdodge(jitter.width = 0.2)) +
+    theme(legend.position = "none") # + ylim(0,0.6)
+  file_name <- paste0("./figs/positional_avg", as.character(levels(group_bin_summary$quad_bin)[quadrant]), ".tiff", sep="")
+  ggsave(filename=file_name, p, width = 25, heigh = 15, units='cm')
+  print(p)
+  
+  
+  # p <- ggplot(data=temp3, mapping=aes(roi_region, maturity_ratio_ami, fill = tissue_treatment)) +
+  #   geom_boxplot(width = 0.5, position = position_dodge(.9), outlier.shape=NA) +
+  #   theme(legend.position = "bottom") +
+  #   geom_point(aes(fill=tissue_treatment), position=position_jitterdodge(jitter.width = 0.2))
   
   # pdf(paste0("./figs/positional_avg", as.character(levels(group_bin_summary$quad_bin)[quadrant]), "_contralateral.pdf"), width=10, height=6)
   # p <- ggplot() + geom_bar(data = group_bin_summary_quad, aes(y=mean_freq, x = side), stat="identity") +

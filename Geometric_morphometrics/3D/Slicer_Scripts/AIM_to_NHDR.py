@@ -15,7 +15,7 @@ import sys
 sys.path.append("./DirFileHelpers")
 from DirFileHelpers.find_all_files import find_all_filepaths
 
-process_dir = (Path.cwd().parent.parent.parent / 'data' / 'Morphology' / '3D' / 'Raw_Scans' / 'batch7').resolve()
+process_dir = (Path.cwd().parent.parent.parent / 'data' / 'Morphology' / '3D' / 'Raw_Scans' / 'batchfinal').resolve()
 aim_dirs, aim_files = find_all_filepaths(process_dir, '.aim')
 hx_dirs, hx_files = find_all_filepaths(process_dir, '.hx')
 txt_dirs, txt_files = find_all_filepaths(process_dir, '.txt')

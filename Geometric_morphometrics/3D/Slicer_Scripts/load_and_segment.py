@@ -2,7 +2,7 @@ from pathlib import Path
 
 # need to type in location of your scans. Here it would be the 'Raw_Scans' directory
 
-working_dir = (Path.cwd().parent.parent.parent / 'data' / 'Morphology' / '3D' / 'Raw_Scans' / 'batch7').resolve()
+working_dir = (Path.cwd().parent.parent.parent / 'data' / 'Morphology' / '3D' / 'Raw_Scans' / 'batchfinal').resolve()
 NHDR_paths = [f for f in working_dir.glob('*') if f.suffix == '.nhdr']
 
 for NHDR_path in NHDR_paths:
