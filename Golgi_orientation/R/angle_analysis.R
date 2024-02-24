@@ -424,11 +424,29 @@ generate_overview_positional_LUT <- function(overview_octile_rois, slices = 720)
   overview_rois <- read.ijzip(file.path("./imagej_rois/overview_octiles/", overview_octile_rois), verbose = FALSE)
   linestrings <- st_sfc(lapply(overview_rois, function(x) st_linestring(x$coords, dim="XY")))
   
+  # https://stackoverflow.com/a/72533271
+  # https://stackoverflow.com/a/72267454
+  bbox <- st_bbox(linestrings) %>% st_as_sfc()
+  
+  polygon <- bbox %>% lwgeom::st_split(linestrings) %>% st_collection_extract("POLYGON")
+  poly_lms <- polygon[2] # hopefully this isn't random!
+  smooth_poly <- smooth(poly_lms, method = "ksmooth", smoothness = 20)
+  smooth_linestring <- st_cast(smooth_poly, 'LINESTRING')
+  endpts <- st_line_sample(linestrings, sample=0)
+  st_nearest_points(endpts, smooth_linestring) %>% {. ->> connecting_linestrings}
+  new_endpts <- st_line_sample(connecting_linestrings, sample = 1)
+  net <- as_sfnetwork(smooth_linestring)
+  net <- st_network_blend(net, st_cast(new_endpts, 'POINT'))
+  net <- convert(net, to_spatial_smooth, protect = new_endpts)
+  smooth_linestrings <- net %>% activate(edges) %>% st_as_sf()
+  smooth_linestrings <- st_sfc(smooth_linestrings[[4]])
+  
+  
   LUT <- setNames(data.frame(matrix(ncol = 3, nrow = slices)), c('pos_angle', 'overview_x', 'overview_y'))
   LUT$pos_angle <- seq(0, 2*pi, length.out = slices)
   
   for (slice in 1:slices) {
-    pt_temp <- positional_angle_to_xy(linestrings, LUT[slice,]$pos_angle)
+    pt_temp <- positional_angle_to_xy(smooth_linestrings, LUT[slice,]$pos_angle)
     LUT[slice,]$overview_x <- pt_temp[[1]][1]
     LUT[slice,]$overview_y <- pt_temp[[1]][2]
   }
@@ -498,6 +516,7 @@ compute_transform_matrices_from_pos_angles <- function(temp_df, min_dist) {
 
 get_overview_transform_matrices_from_pos_angles <- function(info_df, temp_df, min_dist = 100) {
   transformation_matrix <- NA
+  info_df$overview_transformation_matrix <- NA 
   samples <- unique(info_df$old_filename_generic_noside)
   for (sample in 1:length(samples)) {
     calc_transformation_matrix <- compute_transform_matrices_from_pos_angles(temp_df %>% filter(old_filename_generic_noside == unique(info_df$old_filename_generic_noside)[sample]), min_dist)
@@ -518,6 +537,105 @@ plot_extended_lines <- function(filtered_df, octile_files) {
     geom_point(x = row$nuclei_centroidx_overview, y = row$nuclei_centroidy_overview, aes(color = 'red')) +
     geom_sf(data = st_intersection(octile_linestrings, extended_line), color='red') +
     geom_sf(data = extended_line)
+}
+
+
+morph_centroids_to_ref_img <- function(temp_df, overview_pos_LUT) {
+  temp_df$morphedx <- NA
+  temp_df$morphedy <- NA
+  for (sample_i in 1:length(unique(temp_df$old_filename_generic_noside))) {
+    sample_df <- temp_df %>% filter(old_filename_generic_noside == unique(temp_df$old_filename_generic_noside)[sample_i])
+    print(unique(temp_df$old_filename_generic_noside)[sample_i])
+    num_lms <- nrow(sample_df) / 5
+    pull_rows <- as.integer(seq(from=1, to=nrow(sample_df), length.out=num_lms))
+    landmarks <- sample_df %>% arrange(positional_angle) %>% slice(pull_rows) %>% select(positional_angle, intersectionx, intersectiony)
+    landmarks$referencex <- approx(overview_pos_LUT$pos_angle, overview_pos_LUT$overview_x, xout = landmarks$positional_angle)$y
+    landmarks$referencey <- approx(overview_pos_LUT$pos_angle, overview_pos_LUT$overview_y, xout = landmarks$positional_angle)$y
+    
+    # this is all code for getting interior landmarks, it doesn't work will so I've commented it out, not sure it's worth figuring out
+    # # get random cells
+    # landmarks2 <- sample_df %>% na.omit(nuclei_centroidx_overview) %>% slice(sample.int(nrow(sample_df %>% na.omit(nuclei_centroidx_overview)), num_lms)) %>% select(nuclei_centroidx_overview, nuclei_centroidy_overview)
+    # # make line b/w overview xy and cell xy
+    # lm_pair_lines <- st_sfc(mapply(function(x) st_linestring(matrix(c(landmarks[x,2], landmarks[x,3], landmarks2[x,1], landmarks2[x,2]), 2,2, byrow=TRUE), dim='XY'), 1:num_lms, SIMPLIFY = FALSE))
+    # 
+    # # extend the line and find intersect on other side of line
+    # landmarks2$og_length <- st_length(lm_pair_lines) # get lengths
+    # # gets unit vector, multiplies it by a big desired length, and add it to original xy coords
+    # landmarks2$extendedx <- landmarks[,2] + ((landmarks2[,1] - landmarks[,2]) / landmarks2[,3]) * max(landmarks[,2])
+    # landmarks2$extendedy <- landmarks[,3] + ((landmarks2[,2] - landmarks[,3]) / landmarks2[,3]) * max(landmarks[,2])
+    # 
+    # lm_extended_lines <- st_sfc(mapply(function(x) st_linestring(matrix(c(landmarks2[x,1], landmarks2[x,2], landmarks2[x,4], landmarks2[x,5]), 2,2, byrow=TRUE), dim='XY'), 1:num_lms, SIMPLIFY = FALSE))
+    # 
+    # octile_zip <- octile_filenames %>% filter(str_starts(octile_filenames, sample_df$old_filename_generic_noside[1]))
+    # intersection_stats <- get_positional_angle_from_intersection(landmarks2, octile_zip, lm_extended_lines)
+    # landmarks2$extended_pos_angle <- intersection_stats[,1]
+    # landmarks2$extended_intersectx <- intersection_stats[,2]
+    # landmarks2$extended_intersecty <- intersection_stats[,3]
+    # # clear out NA values
+    # to_del_rows <- which(is.na(landmarks2$extended_pos_angle))
+    # landmarks2 <- landmarks2[-to_del_rows,]
+    # landmarks <- landmarks[-to_del_rows,]
+    # 
+    # # find length ratio
+    # lm_to_lm_lines <- st_sfc(mapply(function(x) st_linestring(matrix(c(landmarks[x,]$intersectionx, landmarks[x,]$intersectiony, landmarks2[x,]$extended_intersectx, landmarks2[x,]$extended_intersecty), 2,2, byrow=TRUE), dim='XY'), 1:nrow(landmarks2), SIMPLIFY = FALSE))
+    # landmarks2$length_ratio <- landmarks2$og_length / st_length(lm_to_lm_lines)
+    # 
+    # # draw line on reference b/w reference xys
+    # landmarks2$extended_pos_angle <- as.numeric(landmarks2$extended_pos_angle)
+    # landmarks2 <- landmarks2 %>% mutate(extended_pos_angle = case_when(extended_pos_angle > 2*pi ~ extended_pos_angle - 2*pi,
+    #                                                                    extended_pos_angle < 0 ~ extended_pos_angle + 2*pi,
+    #                                                                TRUE ~ extended_pos_angle))
+    # 
+    # landmarks2$reference_intersectx <- approx(overview_pos_LUT$pos_angle, overview_pos_LUT$overview_x, xout = landmarks2$extended_pos_angle)$y
+    # landmarks2$reference_intersecty <- approx(overview_pos_LUT$pos_angle, overview_pos_LUT$overview_y, xout = landmarks2$extended_pos_angle)$y
+    # ref_to_ref_lines <- st_sfc(mapply(function(x) st_linestring(matrix(c(landmarks[x,4], landmarks[x,5], landmarks2[x,]$reference_intersectx, landmarks2[x,]$reference_intersecty), 2,2, byrow=TRUE), dim='XY'), 1:nrow(landmarks2), SIMPLIFY = FALSE))
+    # 
+    # ref_intercepts <- data.frame(matrix(NA, nrow = nrow(landmarks2), ncol=2))
+    # for (line_i in 1:nrow(landmarks2)) {
+    #   (pt <- st_linesubstring(ref_to_ref_lines[line_i], from = 0, to = landmarks2[line_i,]$length_ratio) %>% st_endpoint())
+    #   ref_intercepts[line_i,1] <- pt[[1]][1]
+    #   ref_intercepts[line_i,2] <- pt[[1]][2]
+    # }
+    # 
+    # # cull interior landmarks that fall outside of perimeter lms
+    # # https://stackoverflow.com/a/52671103
+    # overview_outline <- st_as_sf(landmarks, coords = c("referencex","referencey"), remove = FALSE)
+    # overview_outline <- overview_outline %>% summarise(geometry = st_combine(geometry)) %>% st_cast("POLYGON")
+    # intersection_pts <- st_intersects(st_as_sf(ref_intercepts, coords=c(1:2)), overview_outline, sparse=FALSE)
+    # 
+    # # line_i = 8
+    # # test <- st_linesubstring(ref_to_ref_lines[line_i], from = 0, to = landmarks2[line_i,]$length_ratio)
+    # # test_pt <- st_linesubstring(ref_to_ref_lines[line_i], from = 0, to = landmarks2[line_i,]$length_ratio) %>% st_endpoint()
+    # # plot1<- ggplot()  + geom_point(aes(x = landmarks[,4], y = landmarks[,5]), color='red') + geom_sf(data = ref_to_ref_lines[line_i]) + geom_sf(data=test, color = 'red') + geom_sf(data=test_pt, color = 'red')
+    # # plot2 <- ggplot() + geom_point(aes(x = landmarks[,2], y = landmarks[,3])) + geom_sf(data = lm_to_lm_lines[line_i]) + geom_point(aes(x = landmarks2[line_i,1], y = landmarks2[line_i,2]), color='red')
+    # # plot_grid(plot1, plot2)
+    # 
+    # 
+    # plot1<- ggplot()  + geom_point(aes(x = full_landmarks[,1], y = full_landmarks[,2]), color='red')
+    # plot2 <- ggplot() +  geom_point(aes(x = full_landmarks[,3], y = full_landmarks[,4])) 
+    # plot_grid(plot1, plot2)
+    
+    
+    # frustrating you  can't rbind if the column names are different
+    perimeter_lms <- cbind(landmarks[4:5],landmarks[2:3])
+    # colnames(perimeter_lms) <- c('referencex', 'referencey', 'overviewx', 'overviewy')
+    # interior_lms <- cbind(ref_intercepts[intersection_pts,], landmarks2[intersection_pts,1:2])
+    # colnames(interior_lms) <- colnames(perimeter_lms)
+    # full_landmarks <- rbind(perimeter_lms, interior_lms)
+    full_landmarks <- perimeter_lms
+    
+    rotateM <- getTrafo4x4(rotonto(data.matrix(full_landmarks[1:2]), data.matrix(full_landmarks[3:4]), scale=TRUE))
+    centered_pts <- applyTransform(data.matrix(full_landmarks[3:4]), rotateM)
+    # make TPS
+    morphM <- computeTransform(data.matrix(full_landmarks[1:2]), centered_pts, type='tps')
+    # apply warp
+    rot_pts <- applyTransform(data.matrix(sample_df[26:27]), rotateM)
+    morphed_pts <- applyTransform(rot_pts, morphM)
+    edit_rows <- which(temp_df$old_filename_generic_noside == unique(temp_df$old_filename_generic_noside)[sample_i])
+    temp_df[edit_rows,]$morphedx <- morphed_pts[,1]
+    temp_df[edit_rows,]$morphedy <- morphed_pts[,2]
+  }
+  return(temp_df)
 }
 
 
@@ -696,6 +814,35 @@ plot.windrose <- function(data, dirres = 10, color, control) {
 }
 
 
+positional_graph_sliding_mean <- function(temp_df, perim_n, window) {
+  angle_window <- window/2*pi/180 # convert window to radians and divide by 2
+  moving_avg_pts <- perim_n / 360 * window #number of perimeter pts in each total window (for calculating mean)
+  mean_df <- data.frame(matrix(nrow = perim_n))
+  for (angle_i in 1:perim_n) {
+    angle <- angle_i * pi/(perim_n/2)
+    mean_df[angle_i,1] <- angle
+    if (angle - angle_window < 0) {
+      # I have no idea why this is necessary, seems useless but it doesn't work otherwise
+      a <- angle + 2*pi - angle_window
+      b <- angle+angle_window
+      mean_df[angle_i,2] <- (temp_df %>% filter(between(positional_angle, a, 2*pi) | between(positional_angle, 0, b)) %>% count()) / moving_avg_pts
+    } else if (angle + angle_window > 2*pi) {
+      a <- angle - angle_window
+      b <- angle + angle_window - 2*pi
+      mean_df[angle_i,2] <- (temp_df %>% filter(between(positional_angle, a, 2*pi) | between(positional_angle, 0, b)) %>% count()) / moving_avg_pts
+    } else {
+      a <- angle - angle_window
+      b <- angle + angle_window
+      mean_df[angle_i,2] <- (temp_df %>% filter(between(positional_angle, a, b)) %>% count()) / moving_avg_pts
+    }
+    mean_df[angle_i,3] <- approx(overview_pos_LUT$pos_angle, overview_pos_LUT$overview_x, xout = angle)$y*-1
+    mean_df[angle_i,4] <- approx(overview_pos_LUT$pos_angle, overview_pos_LUT$overview_y, xout = angle)$y*-1
+  }
+  mean_df[,2] <- mean_df[,2] * 100 / nrow(temp_df) 
+  return(mean_df)
+}
+
+
 #### 0.5 Mollweide projection helpers ####
 plot_flatearth <- function(data) {
   proj_type <- "+proj=moll  +lat_0=0 +lon_0=0"
@@ -813,8 +960,8 @@ df <- readRDS("combined_angles.Rda")
 df_masked <- readRDS('combined_angles_positional_masked.Rda') 
 # else you generate them again here and then
 # save the combined dataset for faster loading next time
-df <- compile_angle_df() # this will take a while! be patient
-saveRDS(df, file='combined_angles.Rda') 
+# df <- compile_angle_df() # this will take a while! be patient
+# saveRDS(df, file='combined_angles.Rda') 
 
 
 ### Try to align landmarks between overview image and each side stack
@@ -836,18 +983,18 @@ info_df <- get_transform_matrices_from_rois(info_df, landmark_filenames)
 df <- left_join(df, info_df %>% select(new_filename, old_filename_generic_noside) %>% distinct(), by=c('t' = 'new_filename'))
 
 # this will apply them to the actual xy data in the main df
-df$nuclei_centroidx_overview <- NA
-df$nuclei_centroidy_overview <- NA
-df$GM130_centroidx_overview <- NA
-df$GM130_centroidy_overview <- NA
-
-transformed_centroids <- transform_centroids_xy(df %>% select(t, nuclei_centroidx, nuclei_centroidy), info_df)
-df$nuclei_centroidx_overview <- transformed_centroids[,1]
-df$nuclei_centroidy_overview <- transformed_centroids[,2]
-
-transformed_centroids <- transform_centroids_xy(df %>% select(t, GM130_centroidx, GM130_centroidy), info_df)
-df$GM130_centroidx_overview <- transformed_centroids[,1]
-df$GM130_centroidy_overview <- transformed_centroids[,2]
+# df$nuclei_centroidx_overview <- NA
+# df$nuclei_centroidy_overview <- NA
+# df$GM130_centroidx_overview <- NA
+# df$GM130_centroidy_overview <- NA
+# 
+# transformed_centroids <- transform_centroids_xy(df %>% select(t, nuclei_centroidx, nuclei_centroidy), info_df)
+# df$nuclei_centroidx_overview <- transformed_centroids[,1]
+# df$nuclei_centroidy_overview <- transformed_centroids[,2]
+# 
+# transformed_centroids <- transform_centroids_xy(df %>% select(t, GM130_centroidx, GM130_centroidy), info_df)
+# df$GM130_centroidx_overview <- transformed_centroids[,1]
+# df$GM130_centroidy_overview <- transformed_centroids[,2]
 
 
 ### Correct angles on any images that are not 'square'
@@ -858,13 +1005,13 @@ df$GM130_centroidy_overview <- transformed_centroids[,2]
 # then click 'measure' (ctrl+m) and get the angle
 # just subtract this angle to all other angles
 # see the example image in the github readme
-df <- adjust_base_angles(df, info_df)
-
-
-### Flip all the control angles across the 'y' axis so they match w/ treatment side
-# NOTE: For some reason the LY group ones are reversed? Probably how the section was put on the slide...
-# this is very important part of the analysis
-df <- flip_y_angles(df)
+# df <- adjust_base_angles(df, info_df)
+# 
+# 
+# ### Flip all the control angles across the 'y' axis so they match w/ treatment side
+# # NOTE: For some reason the LY group ones are reversed? Probably how the section was put on the slide...
+# # this is very important part of the analysis
+# df <- flip_y_angles(df)
 
 
 ### filter pairs based on imagej rois ###
@@ -877,7 +1024,7 @@ df <- flip_y_angles(df)
 # so we need to use the 'simple features' sf library to convert roi points into lines, 
 # and then those lines into polygons. sf can then see which centroids are within the polygon
 mask_filenames <- list.files(path="./imagej_rois/region_mask_rois/", pattern=".roi$", recursive=TRUE)
-df_masked <- mask_out_centroids(df, mask_filenames, FALSE)
+# df_masked <- mask_out_centroids(df, mask_filenames, FALSE)
 
 
 ### filter based on distance from the 'baseline' roi line
@@ -921,17 +1068,19 @@ octile_filenames <- list.files(path="./imagej_rois/overview_octiles/", pattern="
 octile_filenames <- data.frame(octile_filenames)
 
 # this is quite slow, gets the positional angles
-df_masked$positional_angle <- NA
-df_masked$intersectionx <- NA
-df_masked$intersectiony <- NA
-df_masked <- get_positional_angle(df_masked, octile_filenames)
-df_masked$positional_angle <- as.numeric(df_masked$positional_angle)
+# df_masked$positional_angle <- NA
+# df_masked$intersectionx <- NA
+# df_masked$intersectiony <- NA
+# df_masked <- get_positional_angle(df_masked, octile_filenames)
+# df_masked$positional_angle <- as.numeric(df_masked$positional_angle)
 
 # This puts the positional angles onto the main 'overview' cartoon
 overview_octile_rois <- octile_filenames %>% filter(octile_filenames == 'overview_octile.zip')
-overview_pos_LUT <- generate_overview_positional_LUT(overview_octile_rois)
+overview_pos_LUT <-  readRDS(file='smooth_LUT.Rda')
+# overview_pos_LUT <- generate_overview_positional_LUT(overview_octile_rois)
+# saveRDS(overview_pos_LUT, file='smooth_LUT.Rda') 
 df_masked <- convert_directional_angle_overview_LUT(df_masked, overview_pos_LUT)
-
+df_masked <- df_masked %>% na.omit(positional_angle)
 
 
 # need to transform the centroids again here to the overview octile image
@@ -939,132 +1088,34 @@ df_masked <- convert_directional_angle_overview_LUT(df_masked, overview_pos_LUT)
 # this isn't great, but it gets us closer at least
 # the warp will get the rest of the way
 info_df <- get_overview_transform_matrices_from_pos_angles(info_df, df_masked, 100)
-
-dummy_df <- df_masked %>% filter(old_filename_generic_noside == '20230414_DMSO_a3')
-
-
-
-
-num_lms <- nrow(dummy_df) / 5
-pull_rows <- as.integer(seq(from=1, to=nrow(dummy_df %>% na.omit(positional_angle)), length.out=num_lms))
-landmarks <- dummy_df %>% arrange(positional_angle) %>% na.omit(positional_angle) %>% slice(pull_rows) %>% select(positional_angle, intersectionx, intersectiony)
-landmarks$referencex <- approx(overview_pos_LUT$pos_angle, overview_pos_LUT$overview_x, xout = landmarks$positional_angle)$y
-landmarks$referencey <- approx(overview_pos_LUT$pos_angle, overview_pos_LUT$overview_y, xout = landmarks$positional_angle)$y
-
-# get random cells
-landmarks2 <- dummy_df %>% na.omit(nuclei_centroidx_overview) %>% slice(sample.int(nrow(dummy_df %>% na.omit(nuclei_centroidx_overview)), num_lms)) %>% select(nuclei_centroidx_overview, nuclei_centroidy_overview)
-# make line b/w overview xy and cell xy
-lm_pair_lines <- st_sfc(mapply(function(x) st_linestring(matrix(c(landmarks[x,2], landmarks[x,3], landmarks2[x,1], landmarks2[x,2]), 2,2, byrow=TRUE), dim='XY'), 1:num_lms, SIMPLIFY = FALSE))
-
-# extend the line and find intersect on other side of line
-landmarks2$og_length <- st_length(lm_pair_lines) # get lengths
-# gets unit vector, multiplies it by a big desired length, and add it to original xy coords
-landmarks2$extendedx <- landmarks[,2] + ((landmarks2[,1] - landmarks[,2]) / landmarks2[,3]) * max(landmarks[,2])
-landmarks2$extendedy <- landmarks[,3] + ((landmarks2[,2] - landmarks[,3]) / landmarks2[,3]) * max(landmarks[,2])
-
-lm_extended_lines <- st_sfc(mapply(function(x) st_linestring(matrix(c(landmarks2[x,1], landmarks2[x,2], landmarks2[x,4], landmarks2[x,5]), 2,2, byrow=TRUE), dim='XY'), 1:num_lms, SIMPLIFY = FALSE))
-
-octile_zip <- octile_filenames %>% filter(str_starts(octile_filenames, dummy_df$old_filename_generic_noside[1]))
-intersection_stats <- get_positional_angle_from_intersection(landmarks2, octile_zip, lm_extended_lines)
-landmarks2$extended_pos_angle <- intersection_stats[,1]
-landmarks2$extended_intersectx <- intersection_stats[,2]
-landmarks2$extended_intersecty <- intersection_stats[,3]
-# clear out NA values
-to_del_rows <- which(is.na(landmarks2$extended_pos_angle))
-landmarks2 <- landmarks2[-to_del_rows,]
-landmarks <- landmarks[-to_del_rows,]
-
-# find length ratio
-lm_to_lm_lines <- st_sfc(mapply(function(x) st_linestring(matrix(c(landmarks[x,]$intersectionx, landmarks[x,]$intersectiony, landmarks2[x,]$extended_intersectx, landmarks2[x,]$extended_intersecty), 2,2, byrow=TRUE), dim='XY'), 1:nrow(landmarks2), SIMPLIFY = FALSE))
-landmarks2$length_ratio <- landmarks2$og_length / st_length(lm_to_lm_lines)
-
-# draw line on reference b/w reference xys
-landmarks2$extended_pos_angle <- as.numeric(landmarks2$extended_pos_angle)
-landmarks2 <- landmarks2 %>% mutate(extended_pos_angle = case_when(extended_pos_angle > 2*pi ~ extended_pos_angle - 2*pi,
-                                                                   extended_pos_angle < 0 ~ angle + 2*pi,
-                                                               TRUE ~ extended_pos_angle))
-
-landmarks2$reference_intersectx <- approx(overview_pos_LUT$pos_angle, overview_pos_LUT$overview_x, xout = landmarks2$extended_pos_angle)$y
-landmarks2$reference_intersecty <- approx(overview_pos_LUT$pos_angle, overview_pos_LUT$overview_y, xout = landmarks2$extended_pos_angle)$y
-ref_to_ref_lines <- st_sfc(mapply(function(x) st_linestring(matrix(c(landmarks[x,4], landmarks[x,5], landmarks2[x,]$reference_intersectx, landmarks2[x,]$reference_intersecty), 2,2, byrow=TRUE), dim='XY'), 1:nrow(landmarks2), SIMPLIFY = FALSE))
-
-ref_intercepts <- data.frame(matrix(NA, nrow = nrow(landmarks2), ncol=2))
-for (line_i in 1:nrow(landmarks2)) {
-  (pt <- st_linesubstring(ref_to_ref_lines[line_i], from = 0, to = landmarks2[line_i,]$length_ratio) %>% st_endpoint())
-  ref_intercepts[line_i,1] <- pt[[1]][1]
-  ref_intercepts[line_i,2] <- pt[[1]][2]
-}
-
-# cull interior landmarks that fall outside of perimeter lms
-# https://stackoverflow.com/a/52671103
-overview_outline <- st_as_sf(landmarks, coords = c("referencex","referencey"), remove = FALSE)
-overview_outline <- overview_outline %>% summarise(geometry = st_combine(geometry)) %>% st_cast("POLYGON")
-intersection_pts <- st_intersects(st_as_sf(ref_intercepts, coords=c(1:2)), overview_outline, sparse=FALSE)
-
-# line_i = 8
-# test <- st_linesubstring(ref_to_ref_lines[line_i], from = 0, to = landmarks2[line_i,]$length_ratio)
-# test_pt <- st_linesubstring(ref_to_ref_lines[line_i], from = 0, to = landmarks2[line_i,]$length_ratio) %>% st_endpoint()
-# plot1<- ggplot()  + geom_point(aes(x = landmarks[,4], y = landmarks[,5]), color='red') + geom_sf(data = ref_to_ref_lines[line_i]) + geom_sf(data=test, color = 'red') + geom_sf(data=test_pt, color = 'red')
-# plot2 <- ggplot() + geom_point(aes(x = landmarks[,2], y = landmarks[,3])) + geom_sf(data = lm_to_lm_lines[line_i]) + geom_point(aes(x = landmarks2[line_i,1], y = landmarks2[line_i,2]), color='red')
-# plot_grid(plot1, plot2)
-
-
-plot1<- ggplot()  + geom_point(aes(x = full_landmarks[,1], y = full_landmarks[,2]), color='red')
-plot2 <- ggplot() +  geom_point(aes(x = full_landmarks[,3], y = full_landmarks[,4])) 
-plot_grid(plot1, plot2)
-
-
-# frustrating you  can't rbind if the column names are different
-perimeter_lms <- cbind(landmarks[4:5],landmarks[2:3])
-colnames(perimeter_lms) <- c('referencex', 'referencey', 'overviewx', 'overviewy')
-interior_lms <- cbind(ref_intercepts[intersection_pts,], landmarks2[intersection_pts,1:2])
-colnames(interior_lms) <- colnames(perimeter_lms)
-full_landmarks <- rbind(perimeter_lms, interior_lms)
-
-rotateM <- getTrafo4x4(rotonto(data.matrix(full_landmarks[1:2]), data.matrix(full_landmarks[3:4]), scale=TRUE))
-centered_pts <- applyTransform(data.matrix(full_landmarks[3:4]), rotateM)
-# make TPS
-morphM <- computeTransform(data.matrix(full_landmarks[1:2]), centered_pts, type='tps')
-# apply warp
-rot_pts <- applyTransform(data.matrix(dummy_df[26:27]), rotateM)
-morphed_pts <- applyTransform(rot_pts, morphM)
-dummy_df$morphedx <- morphed_pts[,1]
-dummy_df$morphedy <- morphed_pts[,2]
-
-
-
+df_masked <- morph_centroids_to_ref_img(df_masked, overview_pos_LUT)
 
 
 dummy_df <- dummy_df[-which(is.na(dummy_df$positional_angle)),]
-dummy_df_both <- dummy_df %>% !is.na()
-dummy_df <- dummy_df_both #%>% filter(side == 'control' & morphedy < 90  & morphedx > 50) 
-mean_df <- data.frame()
-perim_n <- 360
-angle_window <- 2.5*pi/180
-for (angle_i in 1:perim_n) {
-  angle <- angle_i * pi/(perim_n/2)
-  mean_df[angle_i,1] <- angle
-  if (angle - angle_window < 0) {
-    # I have no idea why this is necessary, seems useless but it doesn't work otherwise
-    a <- angle + 2*pi - angle_window
-    b <- angle+angle_window
-  } else if (angle + angle_window > 2*pi) {
-    a <- angle - angle_window
-    b<- angle+angle_window - 2*pi
+dummy_df_both <- dummy_df# %>% !is.na()
+dummy_df <- dummy_df_both %>% filter(side == 'control' & morphedy < 90  & morphedx > 50) 
+
+
+group_mask <- df_masked %>% filter(treatment == 'DMSO')
+filter_mask <- group_mask %>% filter(morphedy > 80 & (morphedx > 70 & morphedx < 100))
+n_samples <- length(unique(filter_mask$old_filename_generic_noside))
+for (sample_i in 1:n_samples) {
+  sample <- unique(filter_mask$old_filename_generic_noside)[sample_i]
+  mean_df <- positional_graph_sliding_mean(filter_mask %>% filter(old_filename_generic_noside == sample), 2000, 10)
+  mean_df <- mean_df %>% mutate(sample =  sample)
+  if (sample_i == 1) {
+    collected_means_df <- mean_df
   } else {
-    a <- angle - angle_window
-    b <- angle + angle_window
+    collected_means_df <- rbind(collected_means_df, mean_df)
   }
-  mean_df[angle_i,2] <- (dummy_df %>% filter(between(positional_angle, a, 2*pi) | between(positional_angle, 0, b)) %>% count()) / angle_window*2
-  mean_df[angle_i,3] <- approx(overview_pos_LUT$pos_angle, overview_pos_LUT$overview_x, xout = angle)$y*-1
-  mean_df[angle_i,4] <- approx(overview_pos_LUT$pos_angle, overview_pos_LUT$overview_y, xout = angle)$y*-1
 }
 
-test_pts <- st_as_sf(mean_df, coords = c("V3","V4"), remove = FALSE)
-ggplot(test_pts) + geom_point(data=dummy_df_both, aes(x = morphedx*-1, y = morphedy*-1), stroke=0, shape=21, color='black') +
-  geom_point(data=dummy_df, aes(x = morphedx*-1, y = morphedy*-1), color='red') +
-  geom_sf(aes(color = n/nrow(dummy_df)*100, size = n/nrow(dummy_df)*100)) + 
-  scale_colour_viridis_c(option = 'inferno') + scale_fill_gradient()
+sum_collected_means_df <- collected_means_df %>% group_by_at(c(1,3,4)) %>% dplyr::summarize(group_mean = mean(n))
+test_pts <- st_as_sf(sum_collected_means_df, coords = c("V3","V4"), remove = FALSE)
+ggplot(test_pts) + geom_point(data=group_mask, aes(x = morphedx*-1, y = morphedy*-1), stroke=0, shape=21, color=alpha('black', .2)) +
+  geom_point(data=filter_mask, aes(x = morphedx*-1, y = morphedy*-1), color='red') +
+  geom_sf(aes(color = group_mean, size = group_mean)) + 
+  scale_colour_viridis_c(option = 'inferno', alpha=.4) + scale_fill_gradient()
 
 
 get_octile_endpoint_network <- function(octile_filename) {
