@@ -32,7 +32,7 @@ library(svglite)
 library(magick)
 
 
-#### 0.1 Helper functions ####
+#### 0.1.1 Data prep helper functions ####
 #for making the dataframe and correcting angle data
 compile_angle_df <- function() {
   filenames <- dir("./cellpose/angle_results/", "*._angle_results.csv") # get all output csv from python
@@ -158,6 +158,21 @@ filter_baseline_distance <- function(baseline_mask_filenames, df, distance=200, 
 }
 
 
+flip_y_angles <- function(df_to_flip) {
+  df_flipped_control <- df_to_flip %>% filter((treatment == 'LY' & side_num == 1) |  (treatment != 'LY' & side_num == 0))
+  df_flipped_control <- df_flipped_control %>% mutate(angle = case_when(angle <= pi ~ pi-angle, angle > pi ~ 3*pi - angle))
+  # I don't think we want to flip the 'old' angles since they are now used for positional angle
+  # if ('angle_old' %in% names(df_flipped_control)) {
+  #   df_flipped_control <- df_flipped_control %>% mutate(angle_old = case_when(angle_old <= pi ~ pi-angle_old, angle_old > pi ~ 3*pi - angle_old))
+  # }
+  
+  df_original_control <- df_to_flip %>% filter((treatment != 'LY' & side_num == 1) |  (treatment == 'LY' & side_num == 0))
+  df_flipped_control <- rbind(df_flipped_control, df_original_control)
+  return(df_flipped_control)
+}
+
+
+#### 0.1.2 Positional angle and lm transformation helpers ####
 get_transform_matrices_from_rois <- function(info_df, landmark_filenames) {
   transformation_matrix <- NA
   samples <- unique(info_df$old_filename_generic_noside)
@@ -234,6 +249,9 @@ solve_transform_matrix_from_lms <- function(overview_lms, stack_lms, rotation =F
   #      x2, 0, 1, 0
   #      0, y2, 0, 1]
   # B = [x1', y1', x2', y2']
+  
+  # OK so I think morpho just does all this automatically but I don't have the heart
+  # to delete all this work
 
   A <- matrix(c(stack_lms[1], 0, 1, 0,
                        0, stack_lms[2], 0, 1,
@@ -302,20 +320,6 @@ transform_reference_centroids_xy <- function(temp_df, info_df) {
     }
   }
   return(centroids_df)
-}
-
-
-flip_y_angles <- function(df_to_flip) {
-  df_flipped_control <- df_to_flip %>% filter((treatment == 'LY' & side_num == 1) |  (treatment != 'LY' & side_num == 0))
-  df_flipped_control <- df_flipped_control %>% mutate(angle = case_when(angle <= pi ~ pi-angle, angle > pi ~ 3*pi - angle))
-  # I don't think we want to flip the 'old' angles since they are now used for positional angle
-  # if ('angle_old' %in% names(df_flipped_control)) {
-  #   df_flipped_control <- df_flipped_control %>% mutate(angle_old = case_when(angle_old <= pi ~ pi-angle_old, angle_old > pi ~ 3*pi - angle_old))
-  # }
-  
-  df_original_control <- df_to_flip %>% filter((treatment != 'LY' & side_num == 1) |  (treatment == 'LY' & side_num == 0))
-  df_flipped_control <- rbind(df_flipped_control, df_original_control)
-  return(df_flipped_control)
 }
 
 
@@ -639,6 +643,149 @@ morph_centroids_to_ref_img <- function(temp_df, overview_pos_LUT) {
 }
 
 
+calc_unit_extend_line <- function(start_pts, end_pts, mult) {
+  # gets unit vector, multiplies it by a big desired length, and add it to original xy coords
+  original_length <- sqrt((end_pts[,1] - start_pts[,1])^2 + (end_pts[,2] - start_pts[,2])^2)
+  extendedx <- start_pts[,1] + ((end_pts[,1] - start_pts[,1]) / original_length) * mult
+  extendedy <- start_pts[,2] + ((end_pts[,2] - start_pts[,2]) / original_length) * mult
+  return(data.frame(extendedx,extendedy))
+}
+
+
+assign_tissue_region <- function(temp_df, info_df, octile_filenames) {
+  # I think setting up 5 'equally' spaced regions will be good
+  # then can choose a distance away from baseline and constrain to the region
+  # glob, mid, center, mid, glob
+  
+  # I will draw 2/5, 2/5, 1/5 on each of the 2 baseline octiles and combine center 1/5ths
+  # (don't want to do 1/5 across the entire baseline since the sections aren't 
+  # perfectly 'flat' and the treated side is often smaller than the other) 
+  # then draw line b/w top of the nasalpit lines and a b/w FNP midline and brain midline
+  # Break the nasalpit line in half at intersection and make the 2/5, 2/5, 1/5 on
+  # it and draw lines b/w baseline and nasalpit lines, extend them to back of
+  # the tissue and these will makeup the regions
+  
+  # this code is gonna be pretty much the same as the previous 'masking' fncs above
+  
+  #TODO maybe remake 3mix rois... It's very difficult to determine midline
+  for (sample_i in 1:length(unique(temp_df$old_filename_generic_noside))) {
+    sample_df <- temp_df %>% filter(old_filename_generic_noside == unique(temp_df$old_filename_generic_noside)[sample_i])
+    octile_zip <- octile_filenames[,1][str_starts(octile_filenames[,1], unique(temp_df$old_filename_generic_noside)[sample_i])]
+    if (length(octile_zip) != 0) {
+      octile_rois <- read.ijzip(file.path("./imagej_rois/overview_octiles/", octile_zip[[1]]), verbose = FALSE)
+      octile_linestrings <- st_sfc(lapply(octile_rois, function(x) st_linestring(x$coords, dim="XY")))
+      # the baseline are linestring 2 and 3, the nasal pit is 1 and 4, brain is 6 and 7
+      # make line from baseline mid to brain mid - I doubt this is the 'right' way to do this...
+      midline <- st_linestring(rbind(st_coordinates(st_line_sample(octile_linestrings[3], sample=0)), st_coordinates(st_line_sample(octile_linestrings[7], sample=0)))[,1:2])
+      # same for nasalpit, then get the pt where the 2 lines intersect (midpoint)
+      np_line <- st_linestring(rbind(st_coordinates(st_line_sample(octile_linestrings[1], sample=0)), st_coordinates(st_line_sample(octile_linestrings[4], sample=1)))[,1:2])
+      np_midpoint <- st_cast(st_intersection(midline, np_line), 'POINT')
+      contra_np_line <- st_linestring(rbind(st_coordinates(st_line_sample(octile_linestrings[1], sample=0))[1:2], st_coordinates(np_midpoint)))
+      treat_np_line <- st_linestring(rbind(st_coordinates(st_line_sample(octile_linestrings[4], sample=1))[1:2], st_coordinates(np_midpoint)))
+      
+      # breakup midline linestrings
+      bl_net <- as_sfnetwork(octile_linestrings[2:3])
+      bl_endpts <- data.frame(matrix(nrow = 4, ncol=2))
+      bl_endpts[1,] <- st_coordinates(st_linesubstring(octile_linestrings[2], from = 0, to = .4) %>% st_endpoint())
+      bl_endpts[2,] <- st_coordinates(st_linesubstring(octile_linestrings[2], from = .4, to = .8) %>% st_endpoint())
+      bl_endpts[3,] <- st_coordinates(st_linesubstring(octile_linestrings[3], from = 0, to = .2) %>% st_endpoint())
+      bl_endpts[4,] <- st_coordinates(st_linesubstring(octile_linestrings[3], from = .2, to = .6) %>% st_endpoint())
+      bl_net <- st_network_blend(bl_net, st_as_sf(bl_endpts, coords=c(1:2)))
+      
+      # now make all the 2/5 2/5 1/5 lines for np...
+      np_endpts <- data.frame(matrix(nrow = 4, ncol=2))
+      np_endpts[1,] <- st_coordinates(st_linesubstring(contra_np_line, from = 0, to = .4) %>% st_endpoint())
+      np_endpts[2,] <- st_coordinates(st_linesubstring(contra_np_line, from = .4, to = .8) %>% st_endpoint())
+      np_endpts[3,] <- st_coordinates(st_linesubstring(treat_np_line, from = .8, to = 1) %>% st_startpoint())
+      np_endpts[4,] <- st_coordinates(st_linesubstring(treat_np_line, from = .8, to = .4) %>% st_endpoint())
+      
+      #make first lines
+      contra_glob_mid2np <- st_linestring(matrix(c(unlist(bl_endpts[1,]), unlist(np_endpts[1,])), 2,2, byrow=TRUE))
+      contra_mid_mid2np <- st_linestring(matrix(c(unlist(bl_endpts[2,]), unlist(np_endpts[2,])), 2,2, byrow=TRUE))
+      treat_mid_mid2np <- st_linestring(matrix(c(unlist(bl_endpts[3,]), unlist(np_endpts[3,])), 2,2, byrow=TRUE))
+      treat_glob_mid2np <- st_linestring(matrix(c(unlist(bl_endpts[4,]), unlist(np_endpts[4,])), 2,2, byrow=TRUE))
+      
+      # extend the lines
+      extended_endpts <- data.frame(matrix(nrow = 4, ncol=2))
+      
+
+      (bl_pt <- st_linesubstring(octile_linestrings[2], from = 0, to = .4) %>% st_endpoint())
+      (np_pt <- st_linesubstring(np_lines[1], from = 0, to = .4) %>% st_endpoint())
+    }
+  }
+  df_masked <- rbind(df_masked, df %>% filter(df$t %in% setdiff(unique(df$t), unique(df_masked$t))))
+  return(df_masked)
+  
+  
+}
+
+
+apply_mask <- function(filtered_df, imagej_mask, type_column, save_img) {
+  centroids <- filtered_df %>% select(nuclei_centroidx, nuclei_centroidy)
+  mask_linestring <- st_linestring(imagej_mask$coords, dim='XY')
+  mask_polygon <- st_cast(mask_linestring, 'POLYGON')
+  keep <- st_intersection(st_multipoint(data.matrix(centroids), dim='XY'), mask_polygon)
+  
+  if (save_img) {
+    p <- ggplot() + geom_sf(data = mask_polygon) +
+      geom_point(data = centroids, aes(nuclei_centroidx, nuclei_centroidy), color = 'red') + geom_sf(data=keep)
+    file_name <- paste(type_column, "_masked_nuclei.svg")
+    ggsave(filename= file.path('./analysis_output/mask_images', file_name), p)
+  }
+  
+  keep <- as.data.frame(as.matrix(keep))
+  filtered_df <- inner_join(filtered_df, keep, by=c('nuclei_centroidx' = 'V1', 'nuclei_centroidy' = 'V2'))
+  return(filtered_df)
+}
+
+
+apply_distance_filter <- function(filtered_df, baseline_roi, type_column, thresh_dist, save_img) {
+  centroids <- filtered_df %>% select(nuclei_centroidx, nuclei_centroidy)
+  baseline_linestring <- st_linestring(baseline_roi$coords, dim='XY')
+  keep <- st_intersection(st_multipoint(data.matrix(centroids), dim='XY'), st_buffer(baseline_linestring, thresh_dist/0.2840910))
+  
+  if (save_img) {
+    p <- ggplot() + geom_point(data = centroids, aes(nuclei_centroidx, nuclei_centroidy), color = 'purple') + geom_sf(data=keep)
+    file_name <- paste(type_column, "_masked_nuclei2.svg")
+    ggsave(filename= file.path('./analysis_output/mask_images', file_name), p)
+  }
+  
+  keep <- as.data.frame(as.matrix(keep))
+  filtered_df <- inner_join(filtered_df, keep, by=c('nuclei_centroidx' = 'V1', 'nuclei_centroidy' = 'V2'))
+  return(filtered_df)
+}
+
+
+filter_baseline_distance <- function(baseline_mask_filenames, df, distance=200, save_img=TRUE) {
+  df_masked <- data.frame()
+  for (i in 1:length(baseline_mask_filenames)) {
+    # reading in the imagej roi creates a matrix of xy coordinates which can be plugged into sf
+    baseline_roi <- read.ijroi(file.path("./imagej_rois/baseline_rois", baseline_mask_filenames[i]), verbose = FALSE)
+    type_col <- sub('(\\A*)_baseline.roi$', '\\1', basename(baseline_mask_filenames[i])) # get column name for matching
+    temp_df <- df %>% filter(t == type_col)
+    if (nrow(temp_df) == 0) {
+      # if the python output data isn't there then don't analyze it...
+      print(paste0('Skipping ', type_col))
+      filtered_df <- temp_df
+      df_masked <- rbind(df_masked, filtered_df)
+    } else {
+      # apply the mask to exclude nuclei outside of it
+      filtered_df <- apply_distance_filter(temp_df, baseline_roi, type_col, distance, save_img)
+      df_masked <- rbind(df_masked, filtered_df) # probably not supposed to do this in a loop but it works
+    }
+  }
+  df_masked <- rbind(df_masked, df %>% filter(df$t %in% setdiff(unique(df$t), unique(df_masked$t))))
+  return(df_masked)
+}
+
+
+
+
+
+
+
+
+
 #### 0.2 Cellularity helpers ####
 mask_inter_area <- function(area_mask, baseline_roi, thresh_dist, res) {
   baseline_linestring <- st_linestring(baseline_roi$coords, dim='XY')
@@ -678,7 +825,7 @@ get_cellularity <- function(df, matches, mask_filenames, baseline_mask_filenames
 }
 
 
-#### 0.3 Circular statistics helpers ####
+#### 0.3.1 Circular statistics helpers ####
 get_circular_stats <- function(treatment_name, side_name, df) {
   temp_df <- df %>% filter(treatment == treatment_name, side == side_name)
   circ_info <- circularize_group(temp_df$angle)
@@ -745,6 +892,41 @@ WalraffTest <- function(cdat, ndat, g, gID) {
   # gID <- c(rep(1,n1), rep(2,n2), rep(3,n3))
   TestRes <- kruskal.test(distdat, g=gID)
   return(TestRes)
+}
+
+#### 0.3.2 BPNME statistics helpers ####
+get_posterior_estimates <- function(fitted) {
+  # this code is from Cremers, unfortunately it will not run  in a reasonable 
+  # time for this many samples (cells)
+  a1 <- fitted$beta1[,1]
+  a2 <- fitted$beta2[,1]
+  b1 <- fitted$beta1[,2]
+  b2 <- fitted$beta2[,2]
+  
+  # Compute zeta + spread control
+  zeta   <- sqrt((a1)^2 + (a2)^2)^2/4
+  spread <- 1 - sqrt((pi * zeta)/2) * exp(-zeta) *
+    (besselI(zeta, 0) + besselI(zeta, 1)) #compute posterior spread
+  
+  # Compute zeta + spread treatment
+  zeta.b   <- sqrt((a1 + b1)^2 + (a2 + b2)^2)^2/4
+  spread.b <- 1 - sqrt((pi * zeta.b)/2) * exp(-zeta.b) *
+    (besselI(zeta.b, 0) + besselI(zeta.b, 1))  #compute posterior spread
+  
+  # Get posterior summary estimates for table
+  mode_est(spread)
+  mean(spread)
+  sd(spread)
+  
+  mode_est(spread.b)
+  mean(spread.b)
+  sd(spread.b)
+  
+  hpd_est(spread)
+  hpd_est(spread.b)
+  print(hpd_est(spread))
+  print(hpd_est(spread.b))
+  return(list(spread, spread.b))
 }
 
 
@@ -905,40 +1087,6 @@ plot_diff_flatearth <- function(baseline_data, diff_data, palette) {
 }
 
 
-#### 0.6 BPNME statistics helpers ####
-get_posterior_estimates <- function(fitted) {
-  a1 <- fitted$beta1[,1]
-  a2 <- fitted$beta2[,1]
-  b1 <- fitted$beta1[,2]
-  b2 <- fitted$beta2[,2]
-
-  # Compute zeta + spread control
-  zeta   <- sqrt((a1)^2 + (a2)^2)^2/4
-  spread <- 1 - sqrt((pi * zeta)/2) * exp(-zeta) *
-    (besselI(zeta, 0) + besselI(zeta, 1)) #compute posterior spread
-
-  # Compute zeta + spread treatment
-  zeta.b   <- sqrt((a1 + b1)^2 + (a2 + b2)^2)^2/4
-  spread.b <- 1 - sqrt((pi * zeta.b)/2) * exp(-zeta.b) *
-    (besselI(zeta.b, 0) + besselI(zeta.b, 1))  #compute posterior spread
-
-  # Get posterior summary estimates for table
-  mode_est(spread)
-  mean(spread)
-  sd(spread)
-
-  mode_est(spread.b)
-  mean(spread.b)
-  sd(spread.b)
-
-  hpd_est(spread)
-  hpd_est(spread.b)
-  print(hpd_est(spread))
-  print(hpd_est(spread.b))
-  return(list(spread, spread.b))
-}
-
-
 #### Main ####
 #### 1 Setting up the DF ####
 # R doesn't have a good way to get the path of where this file is located, unfortunately
@@ -1055,7 +1203,7 @@ mask_filenames <- list.files(path="./imagej_rois/region_mask_rois/", pattern=".r
 # of a line radiating (more dumb word play) from the nuclei centroid towards its'
 # golgi centroid.
 
-# load in the rois. There are 8, starting at the left nasal pit and moving ccw
+# load in the rois. There are 8, starting at the left (contra) nasal pit and moving ccw
 # 1 top of left np to gp
 # 2 gp to midline
 # 3 midline to right gp
@@ -1089,12 +1237,6 @@ df_masked <- df_masked %>% na.omit(positional_angle)
 # the warp will get the rest of the way
 info_df <- get_overview_transform_matrices_from_pos_angles(info_df, df_masked, 100)
 df_masked <- morph_centroids_to_ref_img(df_masked, overview_pos_LUT)
-
-
-dummy_df <- dummy_df[-which(is.na(dummy_df$positional_angle)),]
-dummy_df_both <- dummy_df# %>% !is.na()
-dummy_df <- dummy_df_both %>% filter(side == 'control' & morphedy < 90  & morphedx > 50) 
-
 
 group_mask <- df_masked %>% filter(treatment == 'DMSO')
 filter_mask <- group_mask %>% filter(morphedy > 80 & (morphedx > 70 & morphedx < 100))
@@ -1314,11 +1456,6 @@ for (quadrant in 1:length(levels(bin_summary$quad_bin))) {
   ggsave(filename=file_name, p, width = 25, heigh = 15, units='cm')
   print(p)
   
-  
-  # p <- ggplot(data=temp3, mapping=aes(roi_region, maturity_ratio_ami, fill = tissue_treatment)) +
-  #   geom_boxplot(width = 0.5, position = position_dodge(.9), outlier.shape=NA) +
-  #   theme(legend.position = "bottom") +
-  #   geom_point(aes(fill=tissue_treatment), position=position_jitterdodge(jitter.width = 0.2))
   
   # pdf(paste0("./figs/positional_avg", as.character(levels(group_bin_summary$quad_bin)[quadrant]), "_contralateral.pdf"), width=10, height=6)
   # p <- ggplot() + geom_bar(data = group_bin_summary_quad, aes(y=mean_freq, x = side), stat="identity") +
