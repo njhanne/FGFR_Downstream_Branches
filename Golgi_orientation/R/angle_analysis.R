@@ -172,7 +172,7 @@ flip_y_angles <- function(df_to_flip) {
 }
 
 
-#### 0.1.2 Positional angle and lm transformation helpers ####
+#### 0.1.2 Positional angle and landmark transformation helpers ####
 get_transform_matrices_from_rois <- function(info_df, landmark_filenames) {
   transformation_matrix <- NA
   samples <- unique(info_df$old_filename_generic_noside)
@@ -544,9 +544,30 @@ plot_extended_lines <- function(filtered_df, octile_files) {
 }
 
 
-morph_centroids_to_ref_img <- function(temp_df, overview_pos_LUT) {
+morph_centroids_to_ref_img <- function(temp_df, overview_pos_LUT, overview_octile_rois, info_df) {
   temp_df$morphedx <- NA
   temp_df$morphedy <- NA
+  
+  # Let's get a few internal lms along the midline b/w nasalpits, 
+  # to match from ones we got when making regions
+  # we will do outside of loop since it is from the reference not sample
+  overview_rois <- read.ijzip(file.path("./imagej_rois/overview_octiles/", overview_octile_rois), verbose = FALSE)
+  linestrings <- st_sfc(lapply(overview_rois, function(x) st_linestring(x$coords, dim="XY")))
+  midline <- st_linestring(rbind(st_coordinates(st_line_sample(linestrings[3], sample=0)), st_coordinates(st_line_sample(linestrings[7], sample=0)))[,1:2])
+  # same for nasalpit, then get the pt where the 2 lines intersect (midpoint)
+  np_line <- st_linestring(rbind(st_coordinates(st_line_sample(linestrings[1], sample=0)), st_coordinates(st_line_sample(linestrings[4], sample=1)))[,1:2])
+  np_midpoint <- st_cast(st_intersection(midline, np_line), 'POINT') 
+  contra_np_line <- st_linestring(rbind(st_coordinates(st_line_sample(linestrings[1], sample=0))[1:2], st_coordinates(np_midpoint)))
+  treat_np_line <- st_linestring(rbind(st_coordinates(st_line_sample(linestrings[4], sample=1))[1:2], st_coordinates(np_midpoint)))
+  
+  # now make all the 2/5 2/5 1/5 lines for np...
+  np_endpts_ref <- data.frame(matrix(nrow = 5, ncol=2))
+  np_endpts_ref[1,] <- st_coordinates(st_linesubstring(contra_np_line, from = 0, to = .4) %>% st_endpoint())
+  np_endpts_ref[2,] <- st_coordinates(st_linesubstring(contra_np_line, from = .4, to = .8) %>% st_endpoint())
+  np_endpts_ref[3,] <- st_coordinates(st_linesubstring(treat_np_line, from = .8, to = 1) %>% st_startpoint())
+  np_endpts_ref[4,] <- st_coordinates(st_linesubstring(treat_np_line, from = .8, to = .4) %>% st_endpoint())
+  np_endpts_ref[5,] <- np_midpoint
+  
   for (sample_i in 1:length(unique(temp_df$old_filename_generic_noside))) {
     sample_df <- temp_df %>% filter(old_filename_generic_noside == unique(temp_df$old_filename_generic_noside)[sample_i])
     print(unique(temp_df$old_filename_generic_noside)[sample_i])
@@ -622,12 +643,15 @@ morph_centroids_to_ref_img <- function(temp_df, overview_pos_LUT) {
     
     # frustrating you  can't rbind if the column names are different
     perimeter_lms <- cbind(landmarks[4:5],landmarks[2:3])
+    np_interior_lms <- info_df[info_df$old_filename_generic_noside == unique(temp_df$old_filename_generic_noside)[sample_i],]$internal_lms[[1]]
+    np_interior_lms <- cbind(np_endpts_ref, np_interior_lms)
     # colnames(perimeter_lms) <- c('referencex', 'referencey', 'overviewx', 'overviewy')
     # interior_lms <- cbind(ref_intercepts[intersection_pts,], landmarks2[intersection_pts,1:2])
     # colnames(interior_lms) <- colnames(perimeter_lms)
     # full_landmarks <- rbind(perimeter_lms, interior_lms)
-    full_landmarks <- perimeter_lms
-    
+    colnames(np_interior_lms) <- colnames(perimeter_lms)
+    full_landmarks <- rbind(perimeter_lms, np_interior_lms)
+
     rotateM <- getTrafo4x4(rotonto(data.matrix(full_landmarks[1:2]), data.matrix(full_landmarks[3:4]), scale=TRUE))
     centered_pts <- applyTransform(data.matrix(full_landmarks[3:4]), rotateM)
     # make TPS
@@ -669,6 +693,7 @@ assign_tissue_region <- function(temp_df, info_df, octile_filenames) {
   
   #TODO maybe remake 3mix rois... It's very difficult to determine midline
   temp_df$region <- NA
+  info_df$internal_lms <- NA
   for (sample_i in 1:length(unique(temp_df$old_filename_generic_noside))) {
     sample_df_rows <- which(temp_df$old_filename_generic_noside == unique(temp_df$old_filename_generic_noside)[sample_i])
     sample_df <- temp_df[sample_df_rows,]
@@ -712,6 +737,7 @@ assign_tissue_region <- function(temp_df, info_df, octile_filenames) {
       np_endpts[2,] <- st_coordinates(st_linesubstring(contra_np_line, from = .4, to = .8) %>% st_endpoint())
       np_endpts[3,] <- st_coordinates(st_linesubstring(treat_np_line, from = .8, to = 1) %>% st_startpoint())
       np_endpts[4,] <- st_coordinates(st_linesubstring(treat_np_line, from = .8, to = .4) %>% st_endpoint())
+
       
       # #make first lines
       # contra_glob_mid2np <- st_linestring(matrix(c(unlist(bl_endpts[1,]), unlist(np_endpts[1,])), 2,2, byrow=TRUE))
@@ -720,7 +746,7 @@ assign_tissue_region <- function(temp_df, info_df, octile_filenames) {
       # treat_glob_mid2np <- st_linestring(matrix(c(unlist(bl_endpts[4,]), unlist(np_endpts[4,])), 2,2, byrow=TRUE))
       
       # extend the lines
-      extended_endpts <- apply(cbind(bl_endpts, np_endpts), 1, function(x) unlist(calc_unit_extend_line(x[1:2], x[3:4], max(sample_df$nuclei_centroidy_overview))))
+      extended_endpts <- apply(cbind(bl_endpts, np_endpts), 1, function(x) unlist(calc_unit_extend_line(x[1:2], x[3:4], 2*max(sample_df$nuclei_centroidy_overview))))
       extended_endpts <- t(extended_endpts)
       extended_startpts <- apply(cbind(np_endpts, bl_endpts), 1, function(x) unlist(calc_unit_extend_line(x[1:2], x[3:4], max(sample_df$nuclei_centroidy_overview))))
       extended_startpts <- t(extended_startpts)
@@ -777,13 +803,53 @@ assign_tissue_region <- function(temp_df, info_df, octile_filenames) {
       # as there are plenty of cells on the border b/w polygons
       intersection_indices <- st_intersects(st_cast(st_sfc(st_multipoint(data.matrix(centroids))), 'POINT'), regions) %>% sapply(last)
       temp_df[sample_df_rows,]$region <- intersection_indices
+      
+      np_endpts[5,] <- np_midpoint
+      info_df[info_df$old_filename_generic_noside == sample_df[1,]$old_filename_generic_noside,]$internal_lms <- list(np_endpts)
     }
   }
   temp_df$region_name <- NA
   temp_df <- temp_df %>% mutate(region_name = case_when((region == 1 | region == 5) ~ 'glob',
                                                          (region == 2 | region == 4) ~ 'mid',
                                                          region == 3 ~ 'center', TRUE ~ region_name))
-  return(temp_df)
+  return(list(temp_df, info_df))
+}
+
+
+
+filter_distance_from_octile_lines <- function(temp_df, octile_linestrings, info_df, low_thresh, high_thresh, octiles=c(2,3)) {
+  for (sample_i in 1:length(unique(temp_df$old_filename_generic_noside))) {
+    sample_df_rows <- which(temp_df$old_filename_generic_noside == unique(temp_df$old_filename_generic_noside)[sample_i])
+    sample_df <- temp_df[sample_df_rows,]
+    octile_zip <- octile_filenames[,1][str_starts(octile_filenames[,1], unique(temp_df$old_filename_generic_noside)[sample_i])]
+    if (length(octile_zip) != 0) {
+      octile_rois <- read.ijzip(file.path("./imagej_rois/overview_octiles/", octile_zip[[1]]), verbose = FALSE)
+      octile_linestrings <- st_sfc(lapply(octile_rois, function(x) st_linestring(x$coords, dim="XY")))
+      base_linestrings <- octile_linestrings[octiles]
+      # this is another that's gonna be a bit hacky... technically the first element
+      # of transformation matrix is the scale b/w image and 'overview' image. Since the 
+      # scale should be square the first scale term should be fine
+      # .28 is um per pixel from zstack,
+      scale <- 0.2840910 / abs(info_df[info_df$old_filename_generic_noside == unique(temp_df$old_filename_generic_noside)[sample_i],]$transformation_matrix[[1]][1,1])
+      distance_low <- low_thresh/scale
+      distance_high <- high_thresh/scale
+      
+      centroids <- sample_df %>% select(nuclei_centroidx_overview, nuclei_centroidy_overview)
+      high_rows <- st_intersects(st_cast(st_sfc(st_multipoint(data.matrix(centroids), dim='XY')), 'POINT'), st_union(st_buffer(base_linestrings, distance_high)))
+      keep_rows <- data.frame(high_rows)
+      if (distance_low != 0) {
+        inner_rows <- st_intersects(st_cast(st_sfc(st_multipoint(data.matrix(centroids), dim='XY')), 'POINT'), st_union(st_buffer(base_linestrings, distance_low)))
+        inner_rows <- data.frame(inner_rows)
+        keep_rows <- keep_rows[!keep_rows$row.id %in% inner_rows$row.id,]
+      }
+      if (sample_i == 1) {
+        filter_df <- sample_df[keep_rows$row.id,]
+      } else {
+        filter_df <- rbind(filter_df, sample_df[keep_rows$row.id,])
+      }
+    }
+  }
+  return(filter_df)
 }
 
 
@@ -1231,18 +1297,21 @@ overview_pos_LUT <-  readRDS(file='smooth_LUT.Rda')
 df_masked <- convert_directional_angle_overview_LUT(df_masked, overview_pos_LUT)
 df_masked <- df_masked %>% na.omit(positional_angle)
 
+tmp_list <- assign_tissue_region(df_masked, info_df, octile_filenames)
+df_masked <- tmp_list[[1]]
+info_df <- tmp_list[[2]]
 
 # need to transform the centroids again here to the overview octile image
 # 1 pick two positional angles and use them to re-calculate rotation matrices
 # this isn't great, but it gets us closer at least
 # the warp will get the rest of the way
-info_df <- get_overview_transform_matrices_from_pos_angles(info_df, df_masked, 100)
-df_masked <- morph_centroids_to_ref_img(df_masked, overview_pos_LUT)
+info_df <- get_overview_transform_matrices_from_pos_angles(info_df, df_masked, 100) # not sure this is necessary anymore, may remove
+df_masked <- morph_centroids_to_ref_img(df_masked, overview_pos_LUT, overview_octile_rois, info_df)
 
-df_masked <- assign_tissue_region(df_masked, info_df, octile_filenames)
 
-group_mask <- df_masked %>% filter(treatment == 'DMSO')
-filter_mask <- group_mask %>% filter(region_name == 'center')
+group_mask <- df_masked %>% filter(treatment == 'U73122' & side == 'control')
+distance_mask <- filter_distance_from_octile_lines(group_mask, octile_filenames, info_df, 0,200)
+filter_mask <- distance_mask %>% filter(region_name == 'glob')
 n_samples <- length(unique(filter_mask$old_filename_generic_noside))
 for (sample_i in 1:n_samples) {
   sample <- unique(filter_mask$old_filename_generic_noside)[sample_i]
@@ -1257,11 +1326,18 @@ for (sample_i in 1:n_samples) {
 
 sum_collected_means_df <- collected_means_df %>% group_by_at(c(1,3,4)) %>% dplyr::summarize(group_mean = mean(n))
 test_pts <- st_as_sf(sum_collected_means_df, coords = c("V3","V4"), remove = FALSE)
-ggplot(test_pts) + geom_point(data=group_mask, aes(x = morphedx*-1, y = morphedy*-1), stroke=0, shape=21, color=alpha('black', .2)) +
+
+p1 <- ggplot(test_pts) + geom_point(data=group_mask, aes(x = morphedx*-1, y = morphedy*-1), stroke=0, shape=21, color=alpha('black', .2)) +
   geom_point(data=filter_mask, aes(x = morphedx*-1, y = morphedy*-1), color='red') +
   geom_sf(aes(color = group_mean, size = group_mean)) + 
-  scale_colour_viridis_c(option = 'inferno', alpha=.4) + scale_fill_gradient()
+  scale_colour_viridis_c(limits=c(0,.3), option = 'inferno', alpha=.4) + scale_fill_gradient(limits=c(0,.3)) + scale_size_continuous(limits=c(0,.3))
 
+p2 <- ggplot(test_pts) + geom_point(data=group_mask, aes(x = morphedx*-1, y = morphedy*-1), stroke=0, shape=21, color=alpha('black', .2)) +
+  geom_point(data=filter_mask, aes(x = morphedx*-1, y = morphedy*-1), color='red') +
+  geom_sf(aes(color = group_mean, size = group_mean)) + 
+  scale_colour_viridis_c(limits=c(0,.3), option = 'inferno', alpha=.4) + scale_fill_gradient(limits=c(0,.3)) + scale_size_continuous(limits=c(0,.3))
+
+plot_grid(p1, p2)
 
 get_octile_endpoint_network <- function(octile_filename) {
   # load up the overview octile, make the rois into linestrings
