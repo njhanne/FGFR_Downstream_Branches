@@ -645,9 +645,9 @@ morph_centroids_to_ref_img <- function(temp_df, overview_pos_LUT) {
 
 calc_unit_extend_line <- function(start_pts, end_pts, mult) {
   # gets unit vector, multiplies it by a big desired length, and add it to original xy coords
-  original_length <- sqrt((end_pts[,1] - start_pts[,1])^2 + (end_pts[,2] - start_pts[,2])^2)
-  extendedx <- start_pts[,1] + ((end_pts[,1] - start_pts[,1]) / original_length) * mult
-  extendedy <- start_pts[,2] + ((end_pts[,2] - start_pts[,2]) / original_length) * mult
+  original_length <- sqrt((end_pts[1] - start_pts[1])^2 + (end_pts[2] - start_pts[2])^2)
+  extendedx <- start_pts[1] + ((end_pts[1] - start_pts[1]) / original_length) * mult
+  extendedy <- start_pts[2] + ((end_pts[2] - start_pts[2]) / original_length) * mult
   return(data.frame(extendedx,extendedy))
 }
 
@@ -668,18 +668,32 @@ assign_tissue_region <- function(temp_df, info_df, octile_filenames) {
   # this code is gonna be pretty much the same as the previous 'masking' fncs above
   
   #TODO maybe remake 3mix rois... It's very difficult to determine midline
+  temp_df$region <- NA
   for (sample_i in 1:length(unique(temp_df$old_filename_generic_noside))) {
-    sample_df <- temp_df %>% filter(old_filename_generic_noside == unique(temp_df$old_filename_generic_noside)[sample_i])
+    sample_df_rows <- which(temp_df$old_filename_generic_noside == unique(temp_df$old_filename_generic_noside)[sample_i])
+    sample_df <- temp_df[sample_df_rows,]
     octile_zip <- octile_filenames[,1][str_starts(octile_filenames[,1], unique(temp_df$old_filename_generic_noside)[sample_i])]
+    print(sample_i)
     if (length(octile_zip) != 0) {
       octile_rois <- read.ijzip(file.path("./imagej_rois/overview_octiles/", octile_zip[[1]]), verbose = FALSE)
       octile_linestrings <- st_sfc(lapply(octile_rois, function(x) st_linestring(x$coords, dim="XY")))
+      # this is bigger than the actual sample but it shouldn't matter as cells aren't outside of the the tissue...
+      FNP_poly <- st_convex_hull(st_union(octile_linestrings)) 
       # the baseline are linestring 2 and 3, the nasal pit is 1 and 4, brain is 6 and 7
       # make line from baseline mid to brain mid - I doubt this is the 'right' way to do this...
       midline <- st_linestring(rbind(st_coordinates(st_line_sample(octile_linestrings[3], sample=0)), st_coordinates(st_line_sample(octile_linestrings[7], sample=0)))[,1:2])
       # same for nasalpit, then get the pt where the 2 lines intersect (midpoint)
       np_line <- st_linestring(rbind(st_coordinates(st_line_sample(octile_linestrings[1], sample=0)), st_coordinates(st_line_sample(octile_linestrings[4], sample=1)))[,1:2])
-      np_midpoint <- st_cast(st_intersection(midline, np_line), 'POINT')
+      np_midpoint <- tryCatch( 
+        {st_cast(st_intersection(midline, np_line), 'POINT') 
+        
+        }, error=function(e) {
+        print('sample midline is too short!')
+        midline_ext_pts <- calc_unit_extend_line(st_coordinates(st_line_sample(octile_linestrings[3], sample=0)), st_coordinates(st_line_sample(octile_linestrings[7], sample=0)), st_length(midline)*2)
+        midline_ext <- st_linestring(rbind(st_coordinates(st_line_sample(octile_linestrings[3], sample=0))[1:2], unlist(midline_ext_pts)[1:2])[,1:2])
+        st_cast(st_intersection(midline_ext, np_line), 'POINT')
+        }
+      )
       contra_np_line <- st_linestring(rbind(st_coordinates(st_line_sample(octile_linestrings[1], sample=0))[1:2], st_coordinates(np_midpoint)))
       treat_np_line <- st_linestring(rbind(st_coordinates(st_line_sample(octile_linestrings[4], sample=1))[1:2], st_coordinates(np_midpoint)))
       
@@ -699,91 +713,78 @@ assign_tissue_region <- function(temp_df, info_df, octile_filenames) {
       np_endpts[3,] <- st_coordinates(st_linesubstring(treat_np_line, from = .8, to = 1) %>% st_startpoint())
       np_endpts[4,] <- st_coordinates(st_linesubstring(treat_np_line, from = .8, to = .4) %>% st_endpoint())
       
-      #make first lines
-      contra_glob_mid2np <- st_linestring(matrix(c(unlist(bl_endpts[1,]), unlist(np_endpts[1,])), 2,2, byrow=TRUE))
-      contra_mid_mid2np <- st_linestring(matrix(c(unlist(bl_endpts[2,]), unlist(np_endpts[2,])), 2,2, byrow=TRUE))
-      treat_mid_mid2np <- st_linestring(matrix(c(unlist(bl_endpts[3,]), unlist(np_endpts[3,])), 2,2, byrow=TRUE))
-      treat_glob_mid2np <- st_linestring(matrix(c(unlist(bl_endpts[4,]), unlist(np_endpts[4,])), 2,2, byrow=TRUE))
+      # #make first lines
+      # contra_glob_mid2np <- st_linestring(matrix(c(unlist(bl_endpts[1,]), unlist(np_endpts[1,])), 2,2, byrow=TRUE))
+      # contra_mid_mid2np <- st_linestring(matrix(c(unlist(bl_endpts[2,]), unlist(np_endpts[2,])), 2,2, byrow=TRUE))
+      # treat_mid_mid2np <- st_linestring(matrix(c(unlist(bl_endpts[3,]), unlist(np_endpts[3,])), 2,2, byrow=TRUE))
+      # treat_glob_mid2np <- st_linestring(matrix(c(unlist(bl_endpts[4,]), unlist(np_endpts[4,])), 2,2, byrow=TRUE))
       
       # extend the lines
-      extended_endpts <- data.frame(matrix(nrow = 4, ncol=2))
+      extended_endpts <- apply(cbind(bl_endpts, np_endpts), 1, function(x) unlist(calc_unit_extend_line(x[1:2], x[3:4], max(sample_df$nuclei_centroidy_overview))))
+      extended_endpts <- t(extended_endpts)
+      extended_startpts <- apply(cbind(np_endpts, bl_endpts), 1, function(x) unlist(calc_unit_extend_line(x[1:2], x[3:4], max(sample_df$nuclei_centroidy_overview))))
+      extended_startpts <- t(extended_startpts)
+      # lm_pair_lines <- st_sfc(mapply(function(x) st_linestring(matrix(c(landmarks[x,2], landmarks[x,3], landmarks2[x,1], landmarks2[x,2]), 2,2, byrow=TRUE), dim='XY'), 1:num_lms, SIMPLIFY = FALSE))
       
-
-      (bl_pt <- st_linesubstring(octile_linestrings[2], from = 0, to = .4) %>% st_endpoint())
-      (np_pt <- st_linesubstring(np_lines[1], from = 0, to = .4) %>% st_endpoint())
+      cut_lines <- st_sfc(lapply(1:nrow(extended_endpts), function(x) st_linestring(matrix(cbind(extended_startpts, extended_endpts)[x,], 2,2, byrow=TRUE))))
+      # compared to other things in sf this almost feels too easy...
+      # FNP_region_polys <- st_collection_extract(st_split(FNP_poly, cut_lines))
+      # lmao it was too easy, the order of the shapes will not always be the same
+      # There's not many regions so we'll just do some embarrassing loops
+      # This is so hacky and won't work with a lot of scenarios, but for this
+      # dataset it works fine
+      # regions <- FNP_poly
+      areas <- data.frame(matrix(nrow = 5, ncol=1))
+      for (region_i in 1:5) {
+        if (region_i == 1) {
+          # contra glob
+          temp_polys <-  st_collection_extract(st_split(FNP_poly, cut_lines[1]))
+          temp_areas <- st_area(temp_polys)
+          regions <- st_sfc(temp_polys[which.min(temp_areas)])
+          areas[1,] <- min(temp_areas)
+        }  else if (region_i == 2) {
+          # treat glob
+          temp_polys <-  st_collection_extract(st_split(FNP_poly, cut_lines[4]))
+          temp_areas <- st_area(temp_polys)
+          regions <- st_sfc(rbind(regions, temp_polys[which.min(temp_areas)][1]))
+          areas[5,] <- min(temp_areas)
+        } else if (region_i == 3) {
+          # contra mid
+          temp_polys <-  st_collection_extract(st_split(FNP_poly, cut_lines[1:2]))
+          temp_areas <- st_area(temp_polys)
+          areas[2,] <- min(temp_areas[-match(areas[1,], temp_areas)])
+          regions <- st_sfc(rbind(regions, temp_polys[which(temp_areas == areas[2,])]))
+        } else if (region_i == 4) {
+          # treat mid
+          temp_polys <-  st_collection_extract(st_split(FNP_poly, cut_lines[3:4]))
+          temp_areas <- st_area(temp_polys)
+          areas[4,] <- min(temp_areas[-match(areas[5,], temp_areas)])
+          regions <- st_sfc(rbind(regions, temp_polys[which(temp_areas == areas[4,])]))
+        } else if (region_i == 5) {
+          #center
+          temp_polys <-  st_collection_extract(st_split(FNP_poly, cut_lines[2:3]))
+          temp_areas <- st_area(temp_polys)
+          # this will very likely be the smallest area, but if not we can add some code
+          # similar to here. It needs protection from float errors
+          # temp_areas[-match(round(areas[1,]+areas[2,]), round(temp_areas))]
+          areas[3,] <- min(temp_areas)
+          regions <- st_sfc(rbind(regions, temp_polys[which(temp_areas == areas[3,])]))
+        }
+      }
+      regions <- regions[order(c(1,5,2,4,3))]
+      centroids <- sample_df %>% select(nuclei_centroidx_overview, nuclei_centroidy_overview)
+      # now here is the kind of sf pain I would expect. the 'last' command just reduces the returned index to one value
+      # as there are plenty of cells on the border b/w polygons
+      intersection_indices <- st_intersects(st_cast(st_sfc(st_multipoint(data.matrix(centroids))), 'POINT'), regions) %>% sapply(last)
+      temp_df[sample_df_rows,]$region <- intersection_indices
     }
   }
-  df_masked <- rbind(df_masked, df %>% filter(df$t %in% setdiff(unique(df$t), unique(df_masked$t))))
-  return(df_masked)
-  
-  
+  temp_df$region_name <- NA
+  temp_df <- temp_df %>% mutate(region_name = case_when((region == 1 | region == 5) ~ 'glob',
+                                                         (region == 2 | region == 4) ~ 'mid',
+                                                         region == 3 ~ 'center', TRUE ~ region_name))
+  return(temp_df)
 }
-
-
-apply_mask <- function(filtered_df, imagej_mask, type_column, save_img) {
-  centroids <- filtered_df %>% select(nuclei_centroidx, nuclei_centroidy)
-  mask_linestring <- st_linestring(imagej_mask$coords, dim='XY')
-  mask_polygon <- st_cast(mask_linestring, 'POLYGON')
-  keep <- st_intersection(st_multipoint(data.matrix(centroids), dim='XY'), mask_polygon)
-  
-  if (save_img) {
-    p <- ggplot() + geom_sf(data = mask_polygon) +
-      geom_point(data = centroids, aes(nuclei_centroidx, nuclei_centroidy), color = 'red') + geom_sf(data=keep)
-    file_name <- paste(type_column, "_masked_nuclei.svg")
-    ggsave(filename= file.path('./analysis_output/mask_images', file_name), p)
-  }
-  
-  keep <- as.data.frame(as.matrix(keep))
-  filtered_df <- inner_join(filtered_df, keep, by=c('nuclei_centroidx' = 'V1', 'nuclei_centroidy' = 'V2'))
-  return(filtered_df)
-}
-
-
-apply_distance_filter <- function(filtered_df, baseline_roi, type_column, thresh_dist, save_img) {
-  centroids <- filtered_df %>% select(nuclei_centroidx, nuclei_centroidy)
-  baseline_linestring <- st_linestring(baseline_roi$coords, dim='XY')
-  keep <- st_intersection(st_multipoint(data.matrix(centroids), dim='XY'), st_buffer(baseline_linestring, thresh_dist/0.2840910))
-  
-  if (save_img) {
-    p <- ggplot() + geom_point(data = centroids, aes(nuclei_centroidx, nuclei_centroidy), color = 'purple') + geom_sf(data=keep)
-    file_name <- paste(type_column, "_masked_nuclei2.svg")
-    ggsave(filename= file.path('./analysis_output/mask_images', file_name), p)
-  }
-  
-  keep <- as.data.frame(as.matrix(keep))
-  filtered_df <- inner_join(filtered_df, keep, by=c('nuclei_centroidx' = 'V1', 'nuclei_centroidy' = 'V2'))
-  return(filtered_df)
-}
-
-
-filter_baseline_distance <- function(baseline_mask_filenames, df, distance=200, save_img=TRUE) {
-  df_masked <- data.frame()
-  for (i in 1:length(baseline_mask_filenames)) {
-    # reading in the imagej roi creates a matrix of xy coordinates which can be plugged into sf
-    baseline_roi <- read.ijroi(file.path("./imagej_rois/baseline_rois", baseline_mask_filenames[i]), verbose = FALSE)
-    type_col <- sub('(\\A*)_baseline.roi$', '\\1', basename(baseline_mask_filenames[i])) # get column name for matching
-    temp_df <- df %>% filter(t == type_col)
-    if (nrow(temp_df) == 0) {
-      # if the python output data isn't there then don't analyze it...
-      print(paste0('Skipping ', type_col))
-      filtered_df <- temp_df
-      df_masked <- rbind(df_masked, filtered_df)
-    } else {
-      # apply the mask to exclude nuclei outside of it
-      filtered_df <- apply_distance_filter(temp_df, baseline_roi, type_col, distance, save_img)
-      df_masked <- rbind(df_masked, filtered_df) # probably not supposed to do this in a loop but it works
-    }
-  }
-  df_masked <- rbind(df_masked, df %>% filter(df$t %in% setdiff(unique(df$t), unique(df_masked$t))))
-  return(df_masked)
-}
-
-
-
-
-
-
-
 
 
 #### 0.2 Cellularity helpers ####
@@ -1106,6 +1107,7 @@ getwd() #check our working directory
 # if you've run it before then just load the combined data here
 df <- readRDS("combined_angles.Rda")
 df_masked <- readRDS('combined_angles_positional_masked.Rda') 
+info_df <- read.csv('GM130_image_log.csv')
 # else you generate them again here and then
 # save the combined dataset for faster loading next time
 # df <- compile_angle_df() # this will take a while! be patient
@@ -1118,7 +1120,6 @@ df_masked <- readRDS('combined_angles_positional_masked.Rda')
 # side and landmark 3-4 be treated side
 # need to perform this before the following angle adjustment and flipping as we want them to 
 # be aligned with the overview image!
-info_df <- read.csv('GM130_image_log.csv')
 landmark_filenames <- list.files(path="./imagej_rois/overview_landmarks/", pattern=".zip$", recursive=TRUE)
 landmark_filenames <- data.frame(landmark_filenames)
 
@@ -1238,8 +1239,10 @@ df_masked <- df_masked %>% na.omit(positional_angle)
 info_df <- get_overview_transform_matrices_from_pos_angles(info_df, df_masked, 100)
 df_masked <- morph_centroids_to_ref_img(df_masked, overview_pos_LUT)
 
+df_masked <- assign_tissue_region(df_masked, info_df, octile_filenames)
+
 group_mask <- df_masked %>% filter(treatment == 'DMSO')
-filter_mask <- group_mask %>% filter(morphedy > 80 & (morphedx > 70 & morphedx < 100))
+filter_mask <- group_mask %>% filter(region_name == 'center')
 n_samples <- length(unique(filter_mask$old_filename_generic_noside))
 for (sample_i in 1:n_samples) {
   sample <- unique(filter_mask$old_filename_generic_noside)[sample_i]
