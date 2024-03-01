@@ -1308,21 +1308,77 @@ info_df <- tmp_list[[2]]
 info_df <- get_overview_transform_matrices_from_pos_angles(info_df, df_masked, 100) # not sure this is necessary anymore, may remove
 df_masked <- morph_centroids_to_ref_img(df_masked, overview_pos_LUT, overview_octile_rois, info_df)
 
-
-group_mask <- df_masked %>% filter(treatment == 'U73122' & side == 'control')
-distance_mask <- filter_distance_from_octile_lines(group_mask, octile_filenames, info_df, 0,200)
-filter_mask <- distance_mask %>% filter(region_name == 'glob')
-n_samples <- length(unique(filter_mask$old_filename_generic_noside))
-for (sample_i in 1:n_samples) {
-  sample <- unique(filter_mask$old_filename_generic_noside)[sample_i]
-  mean_df <- positional_graph_sliding_mean(filter_mask %>% filter(old_filename_generic_noside == sample), 2000, 10)
-  mean_df <- mean_df %>% mutate(sample =  sample)
-  if (sample_i == 1) {
-    collected_means_df <- mean_df
-  } else {
-    collected_means_df <- rbind(collected_means_df, mean_df)
+df_masked$treatment <- as.factor(df_masked$treatment)
+df_masked$side <- as.factor(df_masked$side)
+df_masked$region_name <- as.factor(df_masked$region_name)
+for (treatment_i in 1:length(levels(df_masked$treatment))) {
+  for (side_i in 1:2) {
+    for (region_i in 1:length(levels(df_masked$region_name))) {
+      group_mask <- df_masked %>% filter(as.integer(treatment) == treatment_i)
+      distance_mask <- filter_distance_from_octile_lines(group_mask, octile_filenames, info_df, 0,200)
+      
+      # if (levels(df_masked$region_name)[region_i] == 'center') {
+      #   filter_mask <- distance_mask %>% filter(as.integer(region_name) == region_i)
+      # } else {
+      #   filter_mask <- distance_mask %>% filter(as.integer(region_name) == region_i & as.integer(side) == side_i)
+      # }
+      filter_mask <- distance_mask %>% filter(as.integer(region_name) == region_i & as.integer(side) == side_i)
+      
+      n_samples <- length(unique(filter_mask$old_filename_generic_noside))
+      for (sample_i in 1:n_samples) {
+        sample <- unique(filter_mask$old_filename_generic_noside)[sample_i]
+        mean_df <- positional_graph_sliding_mean(filter_mask %>% filter(old_filename_generic_noside == sample), 2000, 10)
+        mean_df <- mean_df %>% mutate(sample =  sample)
+        if (sample_i == 1) {
+          collected_means_df <- mean_df
+        } else {
+          collected_means_df <- rbind(collected_means_df, mean_df)
+        }
+      }
+      
+      sum_collected_means_df <- collected_means_df %>% group_by_at(c(1,3,4)) %>% dplyr::summarize(group_mean = mean(n))
+      test_pts <- st_as_sf(sum_collected_means_df, coords = c("V3","V4"), remove = FALSE)
+      # cat(levels(df_masked$treatment)[treatment_i], ' ', levels(df_masked$side)[side_i], ' ', levels(df_masked$region_name)[region_i])
+      # cat('min: ', min(test_pts$group_mean))
+      # cat('max: ', max(test_pts$group_mean))
+      gradient_max <- 0.3
+      if (filter_mask[1,]$region_name == 'center') {
+        gradient_max <- 0.5
+      }
+      
+      aim_plot <- ggplot(test_pts) + geom_point(data=group_mask, aes(x = morphedx*-1, y = morphedy*-1), stroke=0, shape=21, color=alpha('black', .2)) +
+                  geom_point(data=filter_mask, aes(x = morphedx*-1, y = morphedy*-1), color='red') +
+                  geom_sf(aes(color = group_mean, size = group_mean)) +
+                  # scale_colour_viridis_c(limits=c(0,gradient_max), option = 'inferno', alpha=.4) +
+                  # scale_fill_gradient(limits=c(0,gradient_max)) 
+                  scale_size_continuous(limits=c(0,gradient_max), range=c(1,15)) +
+                  scale_fill_viridis_opt(test_pts$group_mean)
+      
+      file_name <- paste0("./figs/positional_map_0-200_", as.character(levels(df_masked$treatment)[treatment_i]), '_', as.character(levels(df_masked$side)[side_i]), '_', as.character(levels(df_masked$region_name)[region_i]), sep="")
+      ggsave(filename=paste0(file_name, '.tiff'), aim_plot, width = 30, heigh = 30, units='cm')
+      
+      pdf(paste0(file_name, ".pdf"), width=15, height=15)
+      plot(aim_plot)
+      dev.off()
+        #
+    }
   }
 }
+  
+scale_fill_viridis_opt <- function(x)
+{
+  # x <- sort(unique(x))
+  # x <- (x[-1] + x[-length(x)])/2
+  x <- c(seq(0,.1,.01), seq(.1,.2,.001), seq(.2,.3,.01))
+  x <- sort(unique(x))
+  y <- (x - min(x))/diff(range(x))
+  
+  
+  scale_fill_gradientn(values = y, colours = viridis::viridis(length(x)), option = 'inferno', alpha=.4)
+}
+
+
+
 
 sum_collected_means_df <- collected_means_df %>% group_by_at(c(1,3,4)) %>% dplyr::summarize(group_mean = mean(n))
 test_pts <- st_as_sf(sum_collected_means_df, coords = c("V3","V4"), remove = FALSE)
