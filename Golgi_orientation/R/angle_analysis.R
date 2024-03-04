@@ -1027,7 +1027,7 @@ plot.windrose <- function(data, dirres = 10, color, control) {
   p.windrose <- ggplot(data = T_data, aes(x = dir.binned, y = z, fill = color, color = color)) +
       geom_bar(width = 1, linewidth = .5, stat='identity') +
       scale_x_discrete(drop = FALSE, labels = waiver()) +
-      # scale_y_continuous(limits = c(0, 0.07), expand = c(0, 0)) + #,  breaks = c(0,.01,.02,.03,.04)) +
+      scale_y_continuous(limits = c(0, 0.12), expand = c(0, 0)) + #,  breaks = c(0,.01,.02,.03,.04)) +
       coord_polar(start = ((270-(dirres/2))) * pi/180, direction = -1) +
       scale_fill_manual(name = "treated", values = color, drop = FALSE) +
       scale_color_manual(name = "treated", values = c('black','black'), drop = FALSE) +
@@ -1270,7 +1270,9 @@ mask_filenames <- list.files(path="./imagej_rois/region_mask_rois/", pattern=".r
 # of a line radiating (more dumb word play) from the nuclei centroid towards its'
 # golgi centroid.
 
-# load in the rois. There are 8, starting at the left (contra) nasal pit and moving ccw
+# load in the rois. There are 8, starting at the left (contralateral) nasal pit and moving ccw
+# this is counter-intuitive as I had already rotated all the stacks so that treated would be on the left side
+
 # 1 top of left np to gp
 # 2 gp to midline
 # 3 midline to right gp
@@ -1311,19 +1313,19 @@ df_masked <- morph_centroids_to_ref_img(df_masked, overview_pos_LUT, overview_oc
 df_masked$treatment <- as.factor(df_masked$treatment)
 df_masked$side <- as.factor(df_masked$side)
 df_masked$region_name <- as.factor(df_masked$region_name)
-for (treatment_i in 1:length(levels(df_masked$treatment))) {
+df_baseline_masked <- filter_distance_from_octile_lines(df_masked, octile_filenames, info_df, 0,200)
+for (treatment_i in 1:length(levels(df_baseline_masked$treatment))) {
   for (side_i in 1:2) {
-    for (region_i in 1:length(levels(df_masked$region_name))) {
-      group_mask <- df_masked %>% filter(as.integer(treatment) == treatment_i)
-      distance_mask <- filter_distance_from_octile_lines(group_mask, octile_filenames, info_df, 0,200)
+    for (region_i in 1:length(levels(df_baseline_masked$region_name))) {
+      group_mask <- df_baseline_masked %>% filter(as.integer(treatment) == treatment_i)
       
-      # if (levels(df_masked$region_name)[region_i] == 'center') {
-      #   filter_mask <- distance_mask %>% filter(as.integer(region_name) == region_i)
-      # } else {
-      #   filter_mask <- distance_mask %>% filter(as.integer(region_name) == region_i & as.integer(side) == side_i)
-      # }
-      filter_mask <- distance_mask %>% filter(as.integer(region_name) == region_i & as.integer(side) == side_i)
-      
+      # combine centers, there aren't many points here
+      if (levels(df_masked$region_name)[region_i] == 'center') {
+        filter_mask <- group_mask %>% filter(as.integer(region_name) == region_i)
+      } else {
+        filter_mask <- group_mask %>% filter(as.integer(region_name) == region_i & as.integer(side) == side_i)
+      }
+
       n_samples <- length(unique(filter_mask$old_filename_generic_noside))
       for (sample_i in 1:n_samples) {
         sample <- unique(filter_mask$old_filename_generic_noside)[sample_i]
@@ -1346,16 +1348,21 @@ for (treatment_i in 1:length(levels(df_masked$treatment))) {
         gradient_max <- 0.5
       }
       
-      aim_plot <- ggplot(test_pts) + geom_point(data=group_mask, aes(x = morphedx*-1, y = morphedy*-1), stroke=0, shape=21, color=alpha('black', .2)) +
-                  geom_point(data=filter_mask, aes(x = morphedx*-1, y = morphedy*-1), color='red') +
-                  geom_sf(aes(color = group_mean, size = group_mean)) +
-                  # scale_colour_viridis_c(limits=c(0,gradient_max), option = 'inferno', alpha=.4) +
-                  # scale_fill_gradient(limits=c(0,gradient_max)) 
-                  scale_size_continuous(limits=c(0,gradient_max), range=c(1,15)) +
-                  scale_fill_viridis_opt(test_pts$group_mean)
+      # this graph is going to be 'upside down' in order to look normal, but it therefore
+      # will have reflected the left and right sides. Can be fixed in illustrator
       
-      file_name <- paste0("./figs/positional_map_0-200_", as.character(levels(df_masked$treatment)[treatment_i]), '_', as.character(levels(df_masked$side)[side_i]), '_', as.character(levels(df_masked$region_name)[region_i]), sep="")
-      ggsave(filename=paste0(file_name, '.tiff'), aim_plot, width = 30, heigh = 30, units='cm')
+      aim_plot <- ggplot(test_pts) + 
+                  #geom_point(data=group_mask, aes(x = morphedx*-1, y = morphedy*-1), stroke=0, shape=21, color=alpha('black', .2)) +
+                  #geom_point(data=filter_mask, aes(x = morphedx*-1, y = morphedy*-1), color='red') +
+                  geom_sf(aes(color = group_mean, size = group_mean)) +
+                  scale_colour_viridis_c(values = rescale(c(seq(0,.1,.002), seq(.1,.2,.01), seq(.2,.3,.01))), limits=c(0,gradient_max), option = 'inferno', alpha=.4, breaks = c(0, 0.05, 0.1,0.2,0.3))  +
+                  # scale_fill_gradient(limits=c(0,gradient_max)) 
+                  scale_size_continuous(limits=c(0,gradient_max), range=c(10,35), breaks = c(0.05, 0.1,0.2,0.3))
+                  # scale_fill_viridis_opt(test_pts$group_mean)
+
+      
+      file_name <- paste0("./figs/positional_map_0-200_", as.character(levels(df_baseline_masked$treatment)[treatment_i]), '_', as.character(levels(df_baseline_masked$side)[side_i]), '_', as.character(levels(df_baseline_masked$region_name)[region_i]), sep="")
+      # ggsave(filename=paste0(file_name, '.tiff'), aim_plot, width = 30, heigh = 30, units='cm')
       
       pdf(paste0(file_name, ".pdf"), width=15, height=15)
       plot(aim_plot)
@@ -1364,105 +1371,77 @@ for (treatment_i in 1:length(levels(df_masked$treatment))) {
     }
   }
 }
-  
-scale_fill_viridis_opt <- function(x)
-{
-  # x <- sort(unique(x))
-  # x <- (x[-1] + x[-length(x)])/2
-  x <- c(seq(0,.1,.01), seq(.1,.2,.001), seq(.2,.3,.01))
-  x <- sort(unique(x))
-  y <- (x - min(x))/diff(range(x))
-  
-  
-  scale_fill_gradientn(values = y, colours = viridis::viridis(length(x)), option = 'inferno', alpha=.4)
-}
 
 
 
-
-sum_collected_means_df <- collected_means_df %>% group_by_at(c(1,3,4)) %>% dplyr::summarize(group_mean = mean(n))
-test_pts <- st_as_sf(sum_collected_means_df, coords = c("V3","V4"), remove = FALSE)
-
-p1 <- ggplot(test_pts) + geom_point(data=group_mask, aes(x = morphedx*-1, y = morphedy*-1), stroke=0, shape=21, color=alpha('black', .2)) +
-  geom_point(data=filter_mask, aes(x = morphedx*-1, y = morphedy*-1), color='red') +
-  geom_sf(aes(color = group_mean, size = group_mean)) + 
-  scale_colour_viridis_c(limits=c(0,.3), option = 'inferno', alpha=.4) + scale_fill_gradient(limits=c(0,.3)) + scale_size_continuous(limits=c(0,.3))
-
-p2 <- ggplot(test_pts) + geom_point(data=group_mask, aes(x = morphedx*-1, y = morphedy*-1), stroke=0, shape=21, color=alpha('black', .2)) +
-  geom_point(data=filter_mask, aes(x = morphedx*-1, y = morphedy*-1), color='red') +
-  geom_sf(aes(color = group_mean, size = group_mean)) + 
-  scale_colour_viridis_c(limits=c(0,.3), option = 'inferno', alpha=.4) + scale_fill_gradient(limits=c(0,.3)) + scale_size_continuous(limits=c(0,.3))
-
-plot_grid(p1, p2)
-
-get_octile_endpoint_network <- function(octile_filename) {
-  # load up the overview octile, make the rois into linestrings
-  octile_rois <- read.ijzip(file.path("./imagej_rois/overview_octiles/", octile_filename), verbose = FALSE)
-  octile_linestrings <- st_sfc(lapply(octile_rois, function(x) st_linestring(x$coords, dim="XY")))
-  
-  # pull out the roi endpoing only, we don't want the first point as they are same as endpoint
-  octile_endpoints <- lapply(octile_linestrings, function(x) tail(st_coordinates(x), 1)[1:2])
-  # find all combinations of these endpoint pairs
-  combinations <- combn(1:length(octile_endpoints), 2)
-  # make linestrings from each combination
-  octile_endpoint_mesh <- st_sfc(mapply(function(x) st_linestring(c(st_point(c(octile_endpoints[[combinations[,x][1]]][1], octile_endpoints[[combinations[,x][1]]][2])), 
-                                                                    st_point(c(octile_endpoints[[combinations[,x][2]]][1], octile_endpoints[[combinations[,x][2]]][2]))), dim="XY"), 1:ncol(combinations), SIMPLIFY = FALSE))
-  # make it into a network
-  octile_endpoint_network <- as_sfnetwork(octile_endpoint_mesh)
-  # find all the points where the lines intersect and make them into points
-  intersection_ps <- st_collection_extract(st_intersection(octile_endpoint_mesh), "POINT")
-  # # add these points back into the network, which will remake the lines
-  octile_endpoint_network <- st_network_blend(octile_endpoint_network, intersection_ps)
-  return(octile_endpoint_network)
-}
-
-sample_net <- get_octile_endpoint_network(octile_filenames[1,])
-reference_net <- get_octile_endpoint_network(octile_filenames[26,])
-
-# The edges are not connected.
-as_sfnetwork(edges)
-
-# 2 apply rotation matrix, this will do linear transformation of the data to the reference overview
-# we will need to do a thin plate spline warp to get it really aligned after
-# probably could do the warp without all this other algebra... but it feels like too far to warp...
-# and I already had to figure out how to do the transformation algebra so I'm leaving it in
-# apply transformation matrix
-df_masked$nuclei_centroidx_reference <- NA
-df_masked$nuclei_centroidy_reference <- NA
-df_masked$GM130_centroidx_reference <- NA
-df_masked$GM130_centroidy_reference <- NA
-df_masked$reference_intersectionx <- NA
-df_masked$reference_intersectiony  <- NA
-
-transformed_centroids <- transform_reference_centroids_xy(df_masked %>% select(old_filename_generic_noside, nuclei_centroidx_overview, nuclei_centroidy_overview), info_df)
-df_masked$nuclei_centroidx_reference <- transformed_centroids[,1]
-df_masked$nuclei_centroidy_reference <- transformed_centroids[,2]
-
-transformed_centroids <- transform_reference_centroids_xy(df_masked %>% select(old_filename_generic_noside, GM130_centroidx_overview, GM130_centroidy_overview), info_df)
-df_masked$GM130_centroidx_reference <- transformed_centroids[,1]
-df_masked$GM130_centroidy_reference <- transformed_centroids[,2]
-
-transformed_centroids <- transform_reference_centroids_xy(df_masked %>% select(old_filename_generic_noside, intersectionx, intersectiony), info_df)
-df_masked$reference_intersectionx <- transformed_centroids[,1]
-df_masked$reference_intersectiony <- transformed_centroids[,2]
-  
-# create grid of points for TPS warp
-# make TPS
-computeTransform(data.matrix(fixed_lms), data.matrix(samples_lms), type='tps')
-# apply warp
-applyTransform(data.matrix(transformed_centroids[,1:2]), test_transform)
-
-
-
-# adjust the angles 0-2pi and flip the treated side to match (it's opposite of above since they are already flipped from overview)
-df_masked <- df_masked %>% mutate(positional_angle = case_when(positional_angle > 2*pi ~ positional_angle - 2*pi,
-                                                                                 positional_angle < 0 ~ angle + 2*pi,
-                                                                                 TRUE ~ positional_angle))
-
-df_masked$positional_angle_old <- df_masked$positional_angle
-df_masked <- df_masked %>% mutate(positional_angle = case_when(side == 'treated' & positional_angle <= pi ~ pi-positional_angle, side == 'treated' & positional_angle > pi ~ 3*pi - positional_angle, TRUE ~ positional_angle_old))
-
-saveRDS(df_masked, file='combined_angles_positional_masked.Rda') 
+# get_octile_endpoint_network <- function(octile_filename) {
+#   # load up the overview octile, make the rois into linestrings
+#   octile_rois <- read.ijzip(file.path("./imagej_rois/overview_octiles/", octile_filename), verbose = FALSE)
+#   octile_linestrings <- st_sfc(lapply(octile_rois, function(x) st_linestring(x$coords, dim="XY")))
+#   
+#   # pull out the roi endpoing only, we don't want the first point as they are same as endpoint
+#   octile_endpoints <- lapply(octile_linestrings, function(x) tail(st_coordinates(x), 1)[1:2])
+#   # find all combinations of these endpoint pairs
+#   combinations <- combn(1:length(octile_endpoints), 2)
+#   # make linestrings from each combination
+#   octile_endpoint_mesh <- st_sfc(mapply(function(x) st_linestring(c(st_point(c(octile_endpoints[[combinations[,x][1]]][1], octile_endpoints[[combinations[,x][1]]][2])), 
+#                                                                     st_point(c(octile_endpoints[[combinations[,x][2]]][1], octile_endpoints[[combinations[,x][2]]][2]))), dim="XY"), 1:ncol(combinations), SIMPLIFY = FALSE))
+#   # make it into a network
+#   octile_endpoint_network <- as_sfnetwork(octile_endpoint_mesh)
+#   # find all the points where the lines intersect and make them into points
+#   intersection_ps <- st_collection_extract(st_intersection(octile_endpoint_mesh), "POINT")
+#   # # add these points back into the network, which will remake the lines
+#   octile_endpoint_network <- st_network_blend(octile_endpoint_network, intersection_ps)
+#   return(octile_endpoint_network)
+# }
+# 
+# sample_net <- get_octile_endpoint_network(octile_filenames[1,])
+# reference_net <- get_octile_endpoint_network(octile_filenames[26,])
+# 
+# # The edges are not connected.
+# as_sfnetwork(edges)
+# 
+# # 2 apply rotation matrix, this will do linear transformation of the data to the reference overview
+# # we will need to do a thin plate spline warp to get it really aligned after
+# # probably could do the warp without all this other algebra... but it feels like too far to warp...
+# # and I already had to figure out how to do the transformation algebra so I'm leaving it in
+# # apply transformation matrix
+# df_masked$nuclei_centroidx_reference <- NA
+# df_masked$nuclei_centroidy_reference <- NA
+# df_masked$GM130_centroidx_reference <- NA
+# df_masked$GM130_centroidy_reference <- NA
+# df_masked$reference_intersectionx <- NA
+# df_masked$reference_intersectiony  <- NA
+# 
+# transformed_centroids <- transform_reference_centroids_xy(df_masked %>% select(old_filename_generic_noside, nuclei_centroidx_overview, nuclei_centroidy_overview), info_df)
+# df_masked$nuclei_centroidx_reference <- transformed_centroids[,1]
+# df_masked$nuclei_centroidy_reference <- transformed_centroids[,2]
+# 
+# transformed_centroids <- transform_reference_centroids_xy(df_masked %>% select(old_filename_generic_noside, GM130_centroidx_overview, GM130_centroidy_overview), info_df)
+# df_masked$GM130_centroidx_reference <- transformed_centroids[,1]
+# df_masked$GM130_centroidy_reference <- transformed_centroids[,2]
+# 
+# transformed_centroids <- transform_reference_centroids_xy(df_masked %>% select(old_filename_generic_noside, intersectionx, intersectiony), info_df)
+# df_masked$reference_intersectionx <- transformed_centroids[,1]
+# df_masked$reference_intersectiony <- transformed_centroids[,2]
+#   
+# # create grid of points for TPS warp
+# # make TPS
+# computeTransform(data.matrix(fixed_lms), data.matrix(samples_lms), type='tps')
+# # apply warp
+# applyTransform(data.matrix(transformed_centroids[,1:2]), test_transform)
+# 
+# 
+# 
+# # adjust the angles 0-2pi and flip the treated side to match (it's opposite of above since they are already flipped from overview)
+# df_masked <- df_masked %>% mutate(positional_angle = case_when(positional_angle > 2*pi ~ positional_angle - 2*pi,
+#                                                                                  positional_angle < 0 ~ angle + 2*pi,
+#                                                                                  TRUE ~ positional_angle))
+# 
+# df_masked$positional_angle_old <- df_masked$positional_angle
+# df_masked <- df_masked %>% mutate(positional_angle = case_when(side == 'treated' & positional_angle <= pi ~ pi-positional_angle, side == 'treated' & positional_angle > pi ~ 3*pi - positional_angle, TRUE ~ positional_angle_old))
+# 
+# saveRDS(df_masked, file='combined_angles_positional_masked.Rda') 
 
 
 #### 3 Cellularity #### 
@@ -1565,8 +1544,12 @@ WalraffTest(cdat,ndat,g,gID)
 # The windrose plots look good, but it would be nice to get a more quantitative
 # analysis of group differences. I will get relative amount in each quadrant
 # and compare to contralateral and DMSO groups
-df_baseline_masked <- df_baseline_masked  %>% mutate(quad_bin = cut(positional_angle, breaks = c(0, pi/2, pi, 3*pi/2, 2*pi)))
+
 df_baseline_masked <- df_baseline_masked  %>% mutate(treatment = factor(treatment, levels = c('DMSO', 'U0126', 'LY294002', 'U73122', '3Mix')))
+df_baseline_masked$flipped_positional_angle <- df_baseline_masked$positional_angle
+df_baseline_masked <- df_baseline_masked  %>% mutate(flipped_positional_angle = case_when((side == 'control' & positional_angle <= pi) ~ pi-positional_angle, (side == 'control' & positional_angle > pi) ~ 3*pi - positional_angle))
+df_baseline_masked <- df_baseline_masked  %>% mutate(quad_bin = cut(flipped_positional_angle, breaks = c(0, pi/2, pi, 3*pi/2, 2*pi)))
+
 bin_summary <- df_baseline_masked %>% group_by(sample_info, treatment, side) %>% drop_na(quad_bin) %>% count(quad_bin) %>% mutate(freq = n / sum(n))
 group_bin_summary <- bin_summary %>% group_by(treatment, side, quad_bin) %>% dplyr::summarize(mean_freq = mean(freq))
 
@@ -1610,6 +1593,7 @@ for (quadrant in 1:length(levels(bin_summary$quad_bin))) {
 
 #### 6 Windrose plotting ####
 graphing_df <- df_baseline_masked
+
 # graphing_df$angle_deg <- graphing_df$angle * 180 / pi
 graphing_df$angle_deg <- as.numeric(graphing_df$positional_angle) * (180 / pi)
 graphing_df <- graphing_df %>% drop_na(positional_angle)
@@ -1627,15 +1611,15 @@ for (i in 1:length(levels(graphing_df$treatment))) {
   filter_data <- graphing_df %>% filter(as.integer(treatment) == i)
   
   # png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_control_vsDMSO.png"), units='in', width=5, height=5, res=300)
-  pdf(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_contralateral.pdf"), width=5, height=5)
-  control_plot <- plot.windrose(filter_data %>% filter(side == 'contralateral'), 'white', dirres = 10)
+  pdf(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_notcenter_contralateral.pdf"), width=5, height=5)
+  control_plot <- plot.windrose(filter_data %>% filter(side == 'contralateral' & region_name != 'center'), 'white', dirres = 10)
   plot(control_plot)
   dev.off()
   # dev.off()
   
   # png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_treated_vsDMSO.png"), units='in', width=5, height=5, res=300)
-  pdf(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_treated.pdf"), width=5, height=5)
-  treated_plot <- plot.windrose(filter_data %>% filter(side == 'treated'), 'red', dirres = 10)
+  pdf(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_notcenter_treated.pdf"), width=5, height=5)
+  treated_plot <- plot.windrose(filter_data %>% filter(side == 'treated' & region_name != 'center'), 'red', dirres = 10)
   plot(treated_plot)
   dev.off()
   # dev.off()
