@@ -1547,7 +1547,7 @@ WalraffTest(cdat,ndat,g,gID)
 
 df_baseline_masked <- df_baseline_masked  %>% mutate(treatment = factor(treatment, levels = c('DMSO', 'U0126', 'LY294002', 'U73122', '3Mix')))
 df_baseline_masked$flipped_positional_angle <- df_baseline_masked$positional_angle
-df_baseline_masked <- df_baseline_masked  %>% mutate(flipped_positional_angle = case_when((side == 'control' & positional_angle <= pi) ~ pi-positional_angle, (side == 'control' & positional_angle > pi) ~ 3*pi - positional_angle))
+df_baseline_masked <- df_baseline_masked  %>% mutate(flipped_positional_angle = case_when((side == 'control' & positional_angle <= pi) ~ pi-positional_angle, (side == 'control' & positional_angle > pi) ~ 3*pi - positional_angle, TRUE ~ flipped_positional_angle))
 df_baseline_masked <- df_baseline_masked  %>% mutate(quad_bin = cut(flipped_positional_angle, breaks = c(0, pi/2, pi, 3*pi/2, 2*pi)))
 
 bin_summary <- df_baseline_masked %>% group_by(sample_info, treatment, side) %>% drop_na(quad_bin) %>% count(quad_bin) %>% mutate(freq = n / sum(n))
