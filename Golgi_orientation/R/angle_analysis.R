@@ -1027,7 +1027,7 @@ plot.windrose <- function(data, dirres = 10, color, control) {
   p.windrose <- ggplot(data = T_data, aes(x = dir.binned, y = z, fill = color, color = color)) +
       geom_bar(width = 1, linewidth = .5, stat='identity') +
       scale_x_discrete(drop = FALSE, labels = waiver()) +
-      scale_y_continuous(limits = c(0, 0.12), expand = c(0, 0)) + #,  breaks = c(0,.01,.02,.03,.04)) +
+      scale_y_continuous(limits = c(0, 0.0415), expand = c(0, 0)) + #,  breaks = c(0,.01,.02,.03,.04)) +
       coord_polar(start = ((270-(dirres/2))) * pi/180, direction = -1) +
       scale_fill_manual(name = "treated", values = color, drop = FALSE) +
       scale_color_manual(name = "treated", values = c('black','black'), drop = FALSE) +
@@ -1220,13 +1220,13 @@ df <- left_join(df, info_df %>% select(new_filename, old_filename_generic_noside
 # then click 'measure' (ctrl+m) and get the angle
 # just subtract this angle to all other angles
 # see the example image in the github readme
-# df <- adjust_base_angles(df, info_df)
+df <- adjust_base_angles(df, info_df)
 # 
 # 
 # ### Flip all the control angles across the 'y' axis so they match w/ treatment side
 # # NOTE: For some reason the LY group ones are reversed? Probably how the section was put on the slide...
 # # this is very important part of the analysis
-# df <- flip_y_angles(df)
+df <- flip_y_angles(df)
 
 
 ### filter pairs based on imagej rois ###
@@ -1307,7 +1307,7 @@ info_df <- tmp_list[[2]]
 # 1 pick two positional angles and use them to re-calculate rotation matrices
 # this isn't great, but it gets us closer at least
 # the warp will get the rest of the way
-info_df <- get_overview_transform_matrices_from_pos_angles(info_df, df_masked, 100) # not sure this is necessary anymore, may remove
+# info_df <- get_overview_transform_matrices_from_pos_angles(info_df, df_masked, 100) # not sure this is necessary anymore, may remove
 df_masked <- morph_centroids_to_ref_img(df_masked, overview_pos_LUT, overview_octile_rois, info_df)
 
 df_masked$treatment <- as.factor(df_masked$treatment)
@@ -1475,9 +1475,15 @@ plot(cell_plot)
 ### First do some traditional summary statistics
 circular_statistics <- list()
 # get actual circle stats for export
-for (i in 1:length(levels(as.factor(df_baseline_masked$treatment)))) {
-  for (j in 1:length(levels(as.factor(df_baseline_masked$side)))) {
-    temp_circ_stats <- get_circular_stats(levels(as.factor(df_baseline_masked$treatment))[i], levels(as.factor(df_baseline_masked$side))[j], df_baseline_masked)
+df_baseline_masked_nocenter <- df_baseline_masked %>% filter(region_name != 'center')
+# df_baseline_masked_nocenter <- df_baseline_masked_nocenter  %>% mutate(angle = case_when((side == 'control' & positional_angle <= pi) ~ pi-positional_angle, (side == 'control' & positional_angle > pi) ~ 3*pi - positional_angle, TRUE ~ flipped_positional_angle))
+
+# it's possible the angles weren't flipped, can be done here just in case
+df_baseline_masked_nocenter <- flip_y_angles(df_baseline_masked_nocenter)
+
+for (i in 1:length(levels(as.factor(df_baseline_masked_nocenter$treatment)))) {
+  for (j in 1:length(levels(as.factor(df_baseline_masked_nocenter$side)))) {
+    temp_circ_stats <- get_circular_stats(levels(as.factor(df_baseline_masked_nocenter$treatment))[i], levels(as.factor(df_baseline_masked_nocenter$side))[j], df_baseline_masked_nocenter)
     circular_statistics <- append(circular_statistics, list(temp_circ_stats))
   }
 }
@@ -1592,10 +1598,10 @@ for (quadrant in 1:length(levels(bin_summary$quad_bin))) {
 
 
 #### 6 Windrose plotting ####
-graphing_df <- df_baseline_masked
+graphing_df <- df_baseline_masked_nocenter
 
 # graphing_df$angle_deg <- graphing_df$angle * 180 / pi
-graphing_df$angle_deg <- as.numeric(graphing_df$positional_angle) * (180 / pi)
+graphing_df$angle_deg <- as.numeric(graphing_df$angle) * (180 / pi)
 graphing_df <- graphing_df %>% drop_na(positional_angle)
 graphing_df$rel_z <- graphing_df$delta_z / graphing_df$distance
 graphing_df <- graphing_df %>% mutate(side_spd = case_when(side == 'control' ~ 0,
@@ -1610,19 +1616,19 @@ graphing_df <- graphing_df %>% mutate(side = recode(side, 'control' = 'contralat
 for (i in 1:length(levels(graphing_df$treatment))) {
   filter_data <- graphing_df %>% filter(as.integer(treatment) == i)
   
-  # png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_control_vsDMSO.png"), units='in', width=5, height=5, res=300)
+  png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_control_vsDMSO.png"), units='in', width=5, height=5, res=300)
   pdf(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_notcenter_contralateral.pdf"), width=5, height=5)
-  control_plot <- plot.windrose(filter_data %>% filter(side == 'contralateral' & region_name != 'center'), 'white', dirres = 10)
+  control_plot <- plot.windrose(filter_data %>% filter(side == 'contralateral'), 'white', dirres = 10)
   plot(control_plot)
   dev.off()
-  # dev.off()
+  dev.off()
   
-  # png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_treated_vsDMSO.png"), units='in', width=5, height=5, res=300)
+  png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_treated_vsDMSO.png"), units='in', width=5, height=5, res=300)
   pdf(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_notcenter_treated.pdf"), width=5, height=5)
-  treated_plot <- plot.windrose(filter_data %>% filter(side == 'treated' & region_name != 'center'), 'red', dirres = 10)
+  treated_plot <- plot.windrose(filter_data %>% filter(side == 'treated'), 'red', dirres = 10)
   plot(treated_plot)
   dev.off()
-  # dev.off()
+  dev.off()
 }
 
 ## temp code
