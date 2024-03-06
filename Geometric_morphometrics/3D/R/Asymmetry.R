@@ -505,7 +505,7 @@ dev.off()
 
 
 #### 5 MORPHS MIRRORING ####
-load("./figs/RGL_head_heatmaps_pos.rdata")
+load("./lm_data/RGL_heat_head_pos.rdata")
 load("./lm_data/RGL_head_pos.rdata")
 # frontal <- par3d()$userMatrix
 # 
@@ -514,23 +514,18 @@ load("./lm_data/RGL_head_pos.rdata")
 # save(dorsal, frontal, file = "./figs/RGL_head_heatmaps_pos.rdata")
 
 # load mesh of the specimen closest to the mean shape
-head_mesh <- geomorph::read.ply("./data/ATLAS_chick_ctr_23_smooth_ascii_only_face.ply") 
+head_mesh <- vcgImport("./lm_data/Meshes/ATLAS_chick_ctr_face_decimated.ply") 
 # The mesh should only be surface, and be just have the frontal side here
-head_lowres <- vcgQEdecim(head_mesh, percent = 0.15)
+# head_lowres <- vcgQEdecim(head_mesh, percent = 0.15)
 
 
 levels(gdf_mirrored$treatment_mirror)
 
-# Mean shape by treatment and mirrored side
-# LEFT_control_mean_shape <- mshape(mirrored_array[,,which(gdf_mirrored$treatment_mirror == "LEFT_control")])
-# RIGHT_control_mean_shape <- mshape(mirrored_array[,,which(gdf_mirrored$treatment_mirror == "RIGHT_control")])
-# LEFT_triple_mean_shape <- mshape(mirrored_array[,,which(gdf_mirrored$treatment_mirror == "LEFT_triple")])
-# RIGHT_triple_mean_shape <- mshape(mirrored_array[,,which(gdf_mirrored$treatment_mirror == "RIGHT_triple")])
 
-contra_DMSO_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "contra_control")])
-treat_DMSO_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "treat_control")])
-contra_triple_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "contra_triple")])
-treat_triple_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "treat_triple")])
+contra_DMSO_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "contra_DMSO")])
+treat_DMSO_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "treat_DMSO")])
+# contra_triple_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "contra_triple")])
+# treat_triple_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "treat_triple")])
 
 og_lm <- head_array[,, which(dimnames(head_array)[[3]] == "chick_ctr_23")]
 atlas_head_lm <- mirrored_array[,, which(dimnames(mirrored_array)[[3]] == "treated_chick_ctr_23")] # used for figure
@@ -539,13 +534,20 @@ model_head_lm <- GPA_mirrored_contra$coords[,, which(dimnames(GPA_mirrored_contr
 alt_lm <- gdf_mirrored$coords[,, which(dimnames(gdf_mirrored$coords)[[3]] == "treated_chick_ctr_23")]
 
 # Create morphed meshes
-model_DMSO_mesh <- tps3d(head_lowres, as.matrix(og_lm), atlas_head_lm, threads = 1)
-model_DMSO_mesh <- tps3d(head_lowres, as.matrix(og_lm), alt_lm, threads = 1)
+model_DMSO_mesh <- tps3d(head_mesh, as.matrix(og_lm), atlas_head_lm, threads = 1)
+model_DMSO_mesh <- tps3d(head_mesh, as.matrix(og_lm), alt_lm, threads = 1)
 
-contra_DMSO_mesh <- tps3d(head_lowres, as.matrix(atlas_head_lm), contra_DMSO_mean_shape, threads = 1)
-treat_DMSO_mesh <- tps3d(head_lowres, as.matrix(atlas_head_lm), treat_DMSO_mean_shape, threads = 1)
-contra_triple_mesh <- tps3d(head_lowres, as.matrix(atlas_head_lm), contra_triple_mean_shape, threads = 1)
-treat_triple_mesh <- tps3d(head_lowres, as.matrix(atlas_head_lm), treat_triple_mean_shape, threads = 1)
+contra_DMSO_mesh <- tps3d(model_DMSO_mesh, as.matrix(atlas_head_lm), contra_DMSO_mean_shape, threads = 1)
+treat_DMSO_mesh <- tps3d(model_DMSO_mesh, as.matrix(atlas_head_lm), treat_DMSO_mean_shape, threads = 1)
+
+PC1 = PCA_both_sides$x[,1] # get pc1
+PC2 = PCA_both_sides$x[,2] # get pc2
+
+PC1_ctrl <- tps3d(treat_DMSO_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_mirrored_double$coords, x= PC1, Intercept = FALSE, pred1 = 0)[[1]], threads=1)
+PC1_trt <-  tps3d(treat_DMSO_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_mirrored_double$coords, x= PC1, Intercept = FALSE, pred1 = .1)[[1]], threads=1)
+
+PC2_ctrl <- tps3d(contra_DMSO_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_mirrored_double$coords, x= PC2, Intercept = FALSE, pred1 = 0)[[1]], threads=1)
+PC2_trt <-  tps3d(contra_DMSO_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_mirrored_double$coords, x= PC2, Intercept = FALSE, pred1 = .1)[[1]], threads=1)
 
 
 # Plot morphs
@@ -588,14 +590,14 @@ rgl::close3d()
 
 
 # HEATMAPS
-open3d(zoom=0.75, windowRect = c(0,0, 1000, 700), userMatrix = frontal)
-x11(width=1.7, height=8)
-meshDist(contra_DMSO_mesh, contra_triple_mesh, rampcolors = c("blue", "white", "red"), sign = TRUE)
-rgl.snapshot("./figs/Heatmap_contralateral_ctrl-vs-triple_mirrored_frontal.png", top = TRUE)
-dev.print(pdf, "./figs/Heatmap_contralateral_ctrl-vs-triple_mirrored_scale.pdf", width=2, height=9.5)
+# plot the two first PC heatmaps for mean shape - these are used in manuscript
+open3d(zoom = 0.75, userMatrix = heatmap_frontal, windowRect = c(0, 0, 1000, 700)) 
+pdf("./figs/heatmap_PC1_pt05_to_-0pt1_legend.pdf", width = 2.5, height = 6.5)
+meshDist(PC2_ctrl, PC2_trt, rampcolors = c("blue", "white", "red"), sign = TRUE) 
+meshDist(PC1_ctrl, PC1_trt, rampcolors = c("blue", "white", "red"), sign = TRUE) 
+rgl.snapshot("./figs/heatmap_PC1_pt05_to_-0pt1.png", top = TRUE) # this one captures 3d output
+rgl::close3d() # this one captures the heatmap legend as pdf
 dev.off()
-clear3d()
-rgl.close()
 
 open3d(zoom=0.75, windowRect = c(0,0, 1000, 700), userMatrix = frontal)
 x11(width=1.7, height=8)
