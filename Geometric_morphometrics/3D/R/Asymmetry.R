@@ -55,7 +55,7 @@ get_dec_mesh <- function(mesh='face') {
 
 get_palette <- function(lights=FALSE) {
   if (lights) {
-    return(c('#bbbbbb', '#0177bb', '#13783d','#989936', '#882256', '#dddddd', '#89cced', '#ccddaa', '#ccbb43', '#994556'))
+    return(c('#dddddd', '#89cced', '#ccddaa', '#ccbb43', '#994556', '#bbbbbb', '#0177bb', '#13783d','#989936', '#882256'))
   } else {
     return(c('#bbbbbb', '#0177bb', '#13783d','#989936', '#882256'))
   }
@@ -150,10 +150,12 @@ PCA_SYM_FGF <- gm.prcomp(SYM_FGF$symm.shape)
 pal <- get_palette()
 
 pdf("./figs/PCA_symmetric_component.pdf", width = 7.5, height = 6)
-plot(PCA_SYM_FGF, pch = 16, col = pal[as.numeric(classifiers$treatment)], cex = 1.25)
+plot(PCA_SYM_FGF, pch = 16, col = pal[as.numeric(classifiers$treatment)], cex = 0.8)
 # text(PCA_SYM_FGF[["x"]][,1], PCA_SYM_FGF[["x"]][,2], dimnames(head_array)[[3]])
 ordiellipse(PCA_SYM_FGF, classifiers$treatment, kind="sd",conf=0.95, border = pal,
             draw = "polygon", alpha = 0, lty = 1)
+ordiellipse(PCA_SYM_FGF, classifiers$treatment, kind="se",conf=0.95, border = pal,
+            draw = "polygon", alpha = 0, lty = 1, lwd = 4)
 legend("bottomleft", pch = 16, col = pal, legend = levels(classifiers$treatment))
 dev.off()
 
@@ -178,9 +180,12 @@ PCA_ASYM_FGF <- gm.prcomp(SYM_FGF$asymm.shape)
 
 # this figure is used in manuscript
 pdf("./figs/PCA_asymmetric_component.pdf", width = 7.5, height = 6)
-plot(PCA_ASYM_FGF, pch = 16, col = pal[as.numeric(classifiers$treatment)], cex = 1.25)
+plot(PCA_ASYM_FGF, pch = 16, col = pal[as.numeric(classifiers$treatment)], cex = 0.8)
+# text(PCA_ASYM_FGF[["x"]][,1], PCA_ASYM_FGF[["x"]][,2], dimnames(head_array)[[3]], cex=0.5)
 ordiellipse(PCA_ASYM_FGF, classifiers$treatment, kind="sd",conf=0.95, border = pal,
             draw = "polygon", alpha = 0, lty = 1)
+ordiellipse(PCA_ASYM_FGF, classifiers$treatment, kind="se",conf=0.95, border = pal,
+            draw = "polygon", alpha = 0, lty = 1, lwd = 4)
 legend("topright", pch = 16, col = pal, legend = levels(classifiers$treatment))
 dev.off()
 
@@ -251,11 +256,12 @@ gdf_head <- geomorph.data.frame(GPA_geomorph, treatment = classifiers$treatment,
 sym_PC1 = PCA_SYM_FGF$x[,1] # get pc1
 sym_PC2 = PCA_SYM_FGF$x[,2] # get pc2
 
-sym_PC1_ctrl <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_geomorph$coords, x= sym_PC1, Intercept = FALSE, pred1 = .05)[[1]], threads=1)
+sym_PC1_ctrl <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_geomorph$coords, x= sym_PC1, Intercept = FALSE, pred1 = .075)[[1]], threads=1)
 sym_PC1_trt <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_geomorph$coords, x= sym_PC1, Intercept = FALSE, pred1 = -.1)[[1]], threads=1)
 
-sym_PC2_ctrl <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_geomorph$coords, x= sym_PC2, Intercept = FALSE, pred1 = .05)[[1]], threads=1)
-sym_PC2_trt <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_geomorph$coords, x= sym_PC2, Intercept = FALSE, pred1 = -.05)[[1]], threads=1)
+
+sym_PC2_ctrl <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_geomorph$coords, x= sym_PC2, Intercept = FALSE, pred1 = -.025)[[1]], threads=1)
+sym_PC2_trt <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_geomorph$coords, x= sym_PC2, Intercept = FALSE, pred1 = .05)[[1]], threads=1)
 
 open3d(zoom = 0.75, userMatrix = frontal, windowRect = c(0, 0, 1000, 700)) 
 
@@ -277,7 +283,7 @@ open3d(zoom = 0.75, userMatrix = frontal, windowRect = c(0, 0, 1000, 700))
 meshDist(asym_PC1_ctrl, asym_PC1_trt,  rampcolors = c("blue", "white", "red"), sign = TRUE)
 meshDist(asym_PC2_ctrl, asym_PC2_trt,  rampcolors = c("blue", "white", "red"), sign = TRUE)
 
-# Make panels PC1-PC4
+
 # Make heatmap for DA left vs right
 # Make table with proportion of variance explained by each component
 # Remake PCA plots like Costello comparisons
@@ -399,9 +405,11 @@ levels(classifiers_mirrored$treatment_mirror)
 pal_light <- get_palette(lights=TRUE)
 # this plot is in manuscript
 pdf("./figs/mirrored_PCA_treatment_sides.pdf", width = 8.25, height = 6)
-plot(PCA_both_sides, pch = 16, col = pal_light[as.numeric(classifiers_mirrored$treatment_mirror)], cex = 1.5)
-ordiellipse(PCA_both_sides, classifiers_mirrored$treatment_mirror, kind="ehull",conf=0.95, border = pal,
+plot(PCA_both_sides, pch = 16, col = pal_light[as.numeric(classifiers_mirrored$treatment_mirror)], cex = 0.6)
+ordiellipse(PCA_both_sides, classifiers_mirrored$treatment_mirror, kind="sd",conf=0.95, border = pal_light,
             draw = "polygon", alpha = 0, lty = 1)
+ordiellipse(PCA_both_sides, classifiers_mirrored$treatment_mirror, kind="se",conf=0.95, border = pal_light,
+            draw = "polygon", alpha = 50, lty = 1, lwd=4)
 legend("bottomleft", pch = 16, col = pal_light, legend = levels(classifiers_mirrored$treatment_mirror))
 dev.off()
 
@@ -754,7 +762,8 @@ ggplot(plot_df, aes(x=x, y=y, color = treatment)) +
   geom_point(shape=16) +
   scale_fill_manual(values=get_palette(FALSE)) +
   geom_smooth(method=lm, se=FALSE) +
-  geom_smooth(method=lm, se=FALSE,aes(group=1), color='black')
+  geom_smooth(method=lm, se=FALSE,aes(group=1), color='black') +
+  coord_fixed()
 dev.off()
 
 # Compare integration of the face between treatment and control

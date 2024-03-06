@@ -307,16 +307,18 @@ GPA_head <- geomorph::gpagen(A = head_array, curves = as.matrix(curveslide_all),
 # check for outliers
 # looks fine, LY22 I think is a true outlier. Not sure why LY4 is way out there, it looks fine to me
 outlier <- plotOutliers_percentile(A = GPA_head$coords, percentile = 0.99, save.plot = FALSE)
-min(outlier$All_Proc_d$`Proc. d. from mean`) # actually I got lazy & did it this easier way, same concept as above though
-row.names(outlier$All_Proc_d[which(outlier$All_Proc_d$`Proc. d. from mean` == min(outlier$All_Proc_d$`Proc. d. from mean`)),])
 
-
-test3 <- head_array[,, which(dimnames(head_array)[[3]] %in% c("chick_LY_4", 'chick_ctr_23')), drop=FALSE]
-plot_test <- cbind(test2, test3)
-
-open3d(zoom = 0.75, windowRect = c(0, 0, 700, 700))
-plotAllSpecimens(A = test3, label=T)
-rgl::close3d()
+# This code can be helpful for finding incorrect landmarks
+# min(outlier$All_Proc_d$`Proc. d. from mean`) # actually I got lazy & did it this easier way, same concept as above though
+# row.names(outlier$All_Proc_d[which(outlier$All_Proc_d$`Proc. d. from mean` == min(outlier$All_Proc_d$`Proc. d. from mean`)),])
+# 
+# 
+# test3 <- head_array[,, which(dimnames(head_array)[[3]] %in% c("chick_LY_4", 'chick_ctr_23')), drop=FALSE]
+# plot_test <- cbind(test2, test3)
+# 
+# open3d(zoom = 0.75, windowRect = c(0, 0, 700, 700))
+# plotAllSpecimens(A = test3, label=T)
+# rgl::close3d()
 
 # save progress
 saveRDS(head_array, "./lm_data/Head_LM_array_FGF_embryos.rds")
@@ -391,25 +393,28 @@ pdf("./figs/PCA_mean_shape_treatment_histogram.pdf", width = 8.25, height = 6)
 
 p <- ggplot(plot_df, aes(x = plot_df[,1], y =  plot_df[,2], color = classifiers$treatment)) + geom_point() + scale_color_manual(values = pal) +
    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black"))
-px <- ggplot(plot_df, aes(x=plot_df[,1], color=classifiers$treatment)) + geom_density() + scale_color_manual(values = palette()) +
+px <- ggplot(plot_df, aes(x=plot_df[,1], color=classifiers$treatment, fill = classifiers$treatment)) + geom_density(alpha=0.4) + scale_color_manual(values = pal) + scale_fill_manual(values = pal) +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black"))
-py <- ggplot(plot_df, aes(x=plot_df[,2], color=classifiers$treatment)) + geom_density() + scale_color_manual(values = palette()) + coord_flip() +
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black"))
+py <- ggplot(plot_df, aes(x=plot_df[,2], color=classifiers$treatment, fill = classifiers$treatment)) + geom_density(alpha = 0.4) + scale_color_manual(values = pal) + scale_fill_manual(values = pal) + 
+  coord_flip() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black"))
 p %>%
   insert_xaxis_grob(px, grid::unit(1, "in"), position = "top") %>%
   insert_yaxis_grob(py, grid::unit(1, "in"), position = "right") %>%
   ggdraw()
 
-legend("topright", pch = 16, col = palette(), legend = levels(classifiers_filter))
-title("PCA of shape coordinates")
+# legend("topright", pch = 16, col = palette(), legend = levels(classifiers$treatment))
+# title("PCA of shape coordinates")
 dev.off()
 dev.off()
 
 # this figure is in the manuscript
 pdf("./figs/PCA_mean_shape_treatment.pdf", width = 8.25, height = 6)
-plot(PCA_head, pch = 16, col = pal[as.numeric(classifiers$treatment)], cex = 1.25) #, xlim=c(-.1,.15), ylim=c(-.09,.09))
+plot(PCA_head, pch = 16, col = pal[as.numeric(classifiers$treatment)], cex = .8) #, xlim=c(-.1,.15), ylim=c(-.09,.09))
+# text(PCA_head$x, PCA_head$y, dimnames(GPA_head$coords)[[3]])
+ordiellipse(PCA_head, classifiers$treatment, kind="se",conf=0.95, border = pal,
+            draw = "polygon", alpha = 0, lty = 1, lwd = 4)
 ordiellipse(PCA_head, classifiers$treatment, kind="sd",conf=0.95, border = pal,
-            draw = "polygon", alpha = 0, lty = 1)
+            draw = "polygon", alpha = .4, lty = 1, lwd = 1)
 legend("topleft", pch = 16, col = pal, legend = levels(classifiers$treatment))
 # title("PCA of shape coordinates - ctrl vs treatment")
 dev.off()
@@ -591,7 +596,8 @@ meshDist(PC1_ctrl, ctrl_mesh, from= -.015, to= 0.03, rampcolors = c("blue", "whi
 meshDist(PC2_ctrl, PC2_trt, from=-0.015, to=0.03, rampcolors = c("blue", "white", "red"), sign = TRUE)
 
 
-
+open3d(zoom = 0.75, userMatrix = frontal, windowRect = c(0, 0, 1000, 700))
+meshDist(PC1_ctrl, ctrl_mesh, from= -.015, to= 0.03, rampcolors = c("blue", "white", "red"), sign = TRUE)
 
 # you need to click and move mouse around in the figure until it is en-face with
 # the window, then run the line below to save the orientation
@@ -601,7 +607,6 @@ save(heatmap_frontal, file = "./lm_data/RGL_heat_head_pos.rdata")
 
 load("./lm_data/RGL_heat_head_pos.rdata")
 
-# plot heatmap - this is used in manuscript
 open3d(zoom = 0.75, userMatrix = heatmap_frontal, windowRect = c(0, 0, 1000, 700)) 
 pdf("./figs/heatmap_treatment_legend.pdf", width = 2.5, height = 6.5)
 meshDist(ctrl_mesh, U0_mesh, from=-.01, to=0.015, rampcolors = c("blue", "white", "red"), sign = TRUE)
@@ -609,28 +614,28 @@ rgl.snapshot("./figs/Heatmap_U0.png", top = TRUE) # this one captures 3d output
 rgl::close3d() # this one captures the heatmap legend as pdf
 dev.off()
 
-# plot the two first PC heatmaps for mean shape
+# plot the two first PC heatmaps for mean shape - these are used in manuscript
 open3d(zoom = 0.75, userMatrix = heatmap_frontal, windowRect = c(0, 0, 1000, 700)) 
 pdf("./figs/heatmap_PC1_pt05_to_-0pt1_legend.pdf", width = 2.5, height = 6.5)
-meshDist(PC1_ctrl, PC1_trt, from= -.015, to= 0.03, rampcolors = c("blue", "white", "red"), sign = TRUE)
+meshDist(PC1_ctrl, PC1_trt, from= -.02, to= 0.03, rampcolors = c("blue", "white", "red"), sign = TRUE) 
 rgl.snapshot("./figs/heatmap_PC1_pt05_to_-0pt1.png", top = TRUE) # this one captures 3d output
 rgl::close3d() # this one captures the heatmap legend as pdf
 dev.off()
 
 open3d(zoom = 0.75, userMatrix = heatmap_frontal, windowRect = c(0, 0, 1000, 700)) 
 pdf("./figs/heatmap_PC2_-0pt025_to_0pt05_legend.pdf", width = 2.5, height = 6.5)
-meshDist(PC2_ctrl, PC2_trt, from= -.015, to= 0.03, rampcolors = c("blue", "white", "red"), sign = TRUE)
+meshDist(PC2_ctrl, PC2_trt, from= -.02, to= 0.03, rampcolors = c("blue", "white", "red"), sign = TRUE)
 rgl.snapshot("./figs/heatmap_PC2_-0pt025_to_0pt05.png", top = TRUE) # this one captures 3d output
 rgl::close3d() # this one captures the heatmap legend as pdf
 dev.off()
 
-# plot the mean triple treated mesh - this is used in manuscript
+# plot the mean triple treated mesh -
 open3d(zoom=0.75, userMatrix = heatmap_frontal, windowRect = c(0,0,1000,700)) 
 shade3d(triple_mesh, color="gray", alpha=1, specular='black')
 rgl.snapshot("./figs/mean_shape_triple.png", top = TRUE)
 rgl::close3d()
 
-# plot the mean dmso treated mesh - this is used in manuscript
+# plot the mean dmso treated mesh
 open3d(zoom=0.75, userMatrix = heatmap_frontal, windowRect = c(0,0,1000,700)) 
 shade3d(ctrl_mesh, color="gray", alpha=1, specular='black')
 rgl.snapshot("./figs/mean_shape_ctrl.png", top = TRUE)
