@@ -1027,7 +1027,7 @@ plot.windrose <- function(data, dirres = 10, color, control) {
   p.windrose <- ggplot(data = T_data, aes(x = dir.binned, y = z, fill = color, color = color)) +
       geom_bar(width = 1, linewidth = .5, stat='identity') +
       scale_x_discrete(drop = FALSE, labels = waiver()) +
-      scale_y_continuous(limits = c(0, 0.0415), expand = c(0, 0)) + #,  breaks = c(0,.01,.02,.03,.04)) +
+      scale_y_continuous(limits = c(0, 0.045), expand = c(0, 0)) + #,  breaks = c(0,.01,.02,.03,.04)) +
       coord_polar(start = ((270-(dirres/2))) * pi/180, direction = -1) +
       scale_fill_manual(name = "treated", values = color, drop = FALSE) +
       scale_color_manual(name = "treated", values = c('black','black'), drop = FALSE) +
@@ -1220,13 +1220,13 @@ df <- left_join(df, info_df %>% select(new_filename, old_filename_generic_noside
 # then click 'measure' (ctrl+m) and get the angle
 # just subtract this angle to all other angles
 # see the example image in the github readme
-df <- adjust_base_angles(df, info_df)
+# df <- adjust_base_angles(df, info_df)
 # 
 # 
 # ### Flip all the control angles across the 'y' axis so they match w/ treatment side
 # # NOTE: For some reason the LY group ones are reversed? Probably how the section was put on the slide...
 # # this is very important part of the analysis
-df <- flip_y_angles(df)
+# df <- flip_y_angles(df)
 
 
 ### filter pairs based on imagej rois ###
@@ -1475,15 +1475,14 @@ plot(cell_plot)
 ### First do some traditional summary statistics
 circular_statistics <- list()
 # get actual circle stats for export
-df_baseline_masked_nocenter <- df_baseline_masked %>% filter(region_name != 'center')
-# df_baseline_masked_nocenter <- df_baseline_masked_nocenter  %>% mutate(angle = case_when((side == 'control' & positional_angle <= pi) ~ pi-positional_angle, (side == 'control' & positional_angle > pi) ~ 3*pi - positional_angle, TRUE ~ flipped_positional_angle))
+df_watson <- df_baseline_masked %>% filter(region_name != 'center')
 
 # it's possible the angles weren't flipped, can be done here just in case
-df_baseline_masked_nocenter <- flip_y_angles(df_baseline_masked_nocenter)
+df_watson <- flip_y_angles(df_watson)
 
-for (i in 1:length(levels(as.factor(df_baseline_masked_nocenter$treatment)))) {
-  for (j in 1:length(levels(as.factor(df_baseline_masked_nocenter$side)))) {
-    temp_circ_stats <- get_circular_stats(levels(as.factor(df_baseline_masked_nocenter$treatment))[i], levels(as.factor(df_baseline_masked_nocenter$side))[j], df_baseline_masked_nocenter)
+for (i in 1:length(levels(as.factor(df_watson$treatment)))) {
+  for (j in 1:length(levels(as.factor(df_watson$side)))) {
+    temp_circ_stats <- get_circular_stats(levels(as.factor(df_watson$treatment))[i], levels(as.factor(df_watson$side))[j], df_watson)
     circular_statistics <- append(circular_statistics, list(temp_circ_stats))
   }
 }
@@ -1495,20 +1494,22 @@ circular_statistics <- circular_statistics %>% mutate(across(ind_mean:overall_sd
 
 ### compare side v side for each treatment
 watson_side_results <- list()
-for (i in 1:length(levels(as.factor(df_baseline_masked$treatment)))) {
-  watson <- watson.two.test(df_baseline_masked %>% filter(treatment == levels(as.factor(df_baseline_masked$treatment))[i], side =='control') %>% select(angle), df_baseline_masked %>% filter(treatment == levels(as.factor(df_baseline_masked$treatment))[i], side == 'treated') %>% select(angle))
+for (i in 1:length(levels(as.factor(df_watson$treatment)))) {
+  watson <- watson.two.test(df_watson %>% filter(treatment == levels(as.factor(df_watson$treatment))[i], side =='control') %>% select(angle), 
+                            df_watson %>% filter(treatment == levels(as.factor(df_watson$treatment))[i], side == 'treated') %>% select(angle))
   # print(watson)
-  watson_result_list <- list(levels(as.factor(df_baseline_masked$treatment))[i], watson[[1]])
+  watson_result_list <- list(levels(as.factor(df_watson$treatment))[i], watson[[1]])
   watson_side_results <- append(watson_side_results, list(watson_result_list))
 }
 
 ### compare each side-treatment combo against DMSO combined
 watson_results <- list()
-for (i in 1:length(levels(as.factor(df_baseline_masked$treatment)))) {
-  for (j in 1:length(levels(as.factor(df_baseline_masked$side)))) {
-    watson <- watson.two.test(df_baseline_masked %>% filter(treatment == 'DMSO') %>% select(angle), df_baseline_masked %>% filter(treatment == levels(as.factor(df_baseline_masked$treatment))[i], side == levels(as.factor(df_baseline_masked$side))[j]) %>% select(angle))
+for (i in 1:length(levels(as.factor(df_watson$treatment)))) {
+  for (j in 1:length(levels(as.factor(df_watson$side)))) {
+    watson <- watson.two.test(df_watson %>% filter(treatment == 'DMSO') %>% select(angle),
+                              df_watson %>% filter(treatment == levels(as.factor(df_watson$treatment))[i], side == levels(as.factor(df_watson$side))[j]) %>% select(angle))
     # print(watson)
-    watson_result_list <- list(levels(as.factor(df_baseline_masked$treatment))[i], levels(as.factor(df_baseline_masked$side))[j], watson[[1]])
+    watson_result_list <- list(levels(as.factor(df_watson$treatment))[i], levels(as.factor(df_watson$side))[j], watson[[1]])
     watson_results <- append(watson_results, list(watson_result_list))
   }
 }
@@ -1531,8 +1532,8 @@ watson_results <- watson_results %>% mutate(vs_contralateral_pval = case_when(co
                                                                               contralateral_statistic > .152 ~ '< 0.1',
                                                                               TRUE ~ 'greater than 0.1'))
 # combine with stats from above
-combined_results <- full_join(watson_results, circular_statistics, by = c("treatment", "side"))
-write.csv(combined_results, 'Golgi_analysis_output.csv')
+combined_results_nocenter <- full_join(watson_results, circular_statistics, by = c("treatment", "side"))
+write.csv(combined_results, 'Golgi_analysis_output_nocenter.csv')
 
 #  old, maybe delete
 cdat <- DMSO_control.circ[[1]]
@@ -1616,19 +1617,19 @@ graphing_df <- graphing_df %>% mutate(side = recode(side, 'control' = 'contralat
 for (i in 1:length(levels(graphing_df$treatment))) {
   filter_data <- graphing_df %>% filter(as.integer(treatment) == i)
   
-  png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_control_vsDMSO.png"), units='in', width=5, height=5, res=300)
-  pdf(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_notcenter_contralateral.pdf"), width=5, height=5)
+  # png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_control_vsDMSO.png"), units='in', width=5, height=5, res=300)
+  pdf(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_glob_contralateral.pdf"), width=5, height=5)
   control_plot <- plot.windrose(filter_data %>% filter(side == 'contralateral'), 'white', dirres = 10)
   plot(control_plot)
   dev.off()
-  dev.off()
+  # dev.off()
   
-  png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_treated_vsDMSO.png"), units='in', width=5, height=5, res=300)
-  pdf(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_notcenter_treated.pdf"), width=5, height=5)
+  # png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_treated_vsDMSO.png"), units='in', width=5, height=5, res=300)
+  pdf(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_glob_treated.pdf"), width=5, height=5)
   treated_plot <- plot.windrose(filter_data %>% filter(side == 'treated'), 'red', dirres = 10)
   plot(treated_plot)
   dev.off()
-  dev.off()
+  # dev.off()
 }
 
 ## temp code
