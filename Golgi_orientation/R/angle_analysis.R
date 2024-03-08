@@ -1027,7 +1027,7 @@ plot.windrose <- function(data, dirres = 10, color, control) {
   p.windrose <- ggplot(data = T_data, aes(x = dir.binned, y = z, fill = color, color = color)) +
       geom_bar(width = 1, linewidth = .5, stat='identity') +
       scale_x_discrete(drop = FALSE, labels = waiver()) +
-      scale_y_continuous(limits = c(0, 0.045), expand = c(0, 0)) + #,  breaks = c(0,.01,.02,.03,.04)) +
+      scale_y_continuous(limits = c(0, 0.042), expand = c(0, 0)) + #,  breaks = c(0,.01,.02,.03,.04)) +
       coord_polar(start = ((270-(dirres/2))) * pi/180, direction = -1) +
       scale_fill_manual(name = "treated", values = color, drop = FALSE) +
       scale_color_manual(name = "treated", values = c('black','black'), drop = FALSE) +
@@ -1475,7 +1475,7 @@ plot(cell_plot)
 ### First do some traditional summary statistics
 circular_statistics <- list()
 # get actual circle stats for export
-df_watson <- df_baseline_masked %>% filter(region_name != 'center')
+df_watson <- df_baseline_masked #%>% filter(region_name == 'mid')
 
 # it's possible the angles weren't flipped, can be done here just in case
 df_watson <- flip_y_angles(df_watson)
@@ -1532,8 +1532,8 @@ watson_results <- watson_results %>% mutate(vs_contralateral_pval = case_when(co
                                                                               contralateral_statistic > .152 ~ '< 0.1',
                                                                               TRUE ~ 'greater than 0.1'))
 # combine with stats from above
-combined_results_nocenter <- full_join(watson_results, circular_statistics, by = c("treatment", "side"))
-write.csv(combined_results, 'Golgi_analysis_output_nocenter.csv')
+combined_results <- full_join(watson_results, circular_statistics, by = c("treatment", "side"))
+write.csv(combined_results, 'Golgi_analysis_output_all.csv')
 
 #  old, maybe delete
 cdat <- DMSO_control.circ[[1]]
@@ -1599,7 +1599,10 @@ for (quadrant in 1:length(levels(bin_summary$quad_bin))) {
 
 
 #### 6 Windrose plotting ####
-graphing_df <- df_baseline_masked_nocenter
+graphing_df <- df_baseline_masked #%>% filter(region_name != 'center')
+
+# it's possible the angles weren't flipped, can be done here just in case
+graphing_df <- flip_y_angles(graphing_df)
 
 # graphing_df$angle_deg <- graphing_df$angle * 180 / pi
 graphing_df$angle_deg <- as.numeric(graphing_df$angle) * (180 / pi)
@@ -1617,19 +1620,26 @@ graphing_df <- graphing_df %>% mutate(side = recode(side, 'control' = 'contralat
 for (i in 1:length(levels(graphing_df$treatment))) {
   filter_data <- graphing_df %>% filter(as.integer(treatment) == i)
   
-  # png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_control_vsDMSO.png"), units='in', width=5, height=5, res=300)
-  pdf(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_glob_contralateral.pdf"), width=5, height=5)
-  control_plot <- plot.windrose(filter_data %>% filter(side == 'contralateral'), 'white', dirres = 10)
-  plot(control_plot)
-  dev.off()
+  # # png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_control_vsDMSO.png"), units='in', width=5, height=5, res=300)
+  # pdf(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_contralateral.pdf"), width=5, height=5)
+  # control_plot <- plot.windrose(filter_data %>% filter(side == 'contralateral'), 'white', dirres = 10)
+  # plot(control_plot)
   # dev.off()
+  # # dev.off()
+  # 
+  # # png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_treated_vsDMSO.png"), units='in', width=5, height=5, res=300)
+  # pdf(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_treated.pdf"), width=5, height=5)
+  # treated_plot <- plot.windrose(filter_data %>% filter(side == 'treated'), 'red', dirres = 10)
+  # plot(treated_plot)
+  # dev.off()
+  # # dev.off()
   
-  # png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_treated_vsDMSO.png"), units='in', width=5, height=5, res=300)
-  pdf(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_glob_treated.pdf"), width=5, height=5)
-  treated_plot <- plot.windrose(filter_data %>% filter(side == 'treated'), 'red', dirres = 10)
-  plot(treated_plot)
-  dev.off()
-  # dev.off()
+  if (i == 1) {
+    pdf(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "combined.pdf"), width=5, height=5)
+    combined_plot <- plot.windrose(filter_data, 'white', dirres = 10)
+    plot(combined_plot)
+    dev.off()
+  }
 }
 
 ## temp code
