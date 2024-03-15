@@ -853,6 +853,76 @@ filter_distance_from_octile_lines <- function(temp_df, octile_linestrings, info_
 }
 
 
+# get_octile_endpoint_network <- function(octile_filename) {
+#   # load up the overview octile, make the rois into linestrings
+#   octile_rois <- read.ijzip(file.path("./imagej_rois/overview_octiles/", octile_filename), verbose = FALSE)
+#   octile_linestrings <- st_sfc(lapply(octile_rois, function(x) st_linestring(x$coords, dim="XY")))
+#   
+#   # pull out the roi endpoing only, we don't want the first point as they are same as endpoint
+#   octile_endpoints <- lapply(octile_linestrings, function(x) tail(st_coordinates(x), 1)[1:2])
+#   # find all combinations of these endpoint pairs
+#   combinations <- combn(1:length(octile_endpoints), 2)
+#   # make linestrings from each combination
+#   octile_endpoint_mesh <- st_sfc(mapply(function(x) st_linestring(c(st_point(c(octile_endpoints[[combinations[,x][1]]][1], octile_endpoints[[combinations[,x][1]]][2])), 
+#                                                                     st_point(c(octile_endpoints[[combinations[,x][2]]][1], octile_endpoints[[combinations[,x][2]]][2]))), dim="XY"), 1:ncol(combinations), SIMPLIFY = FALSE))
+#   # make it into a network
+#   octile_endpoint_network <- as_sfnetwork(octile_endpoint_mesh)
+#   # find all the points where the lines intersect and make them into points
+#   intersection_ps <- st_collection_extract(st_intersection(octile_endpoint_mesh), "POINT")
+#   # # add these points back into the network, which will remake the lines
+#   octile_endpoint_network <- st_network_blend(octile_endpoint_network, intersection_ps)
+#   return(octile_endpoint_network)
+# }
+# 
+# sample_net <- get_octile_endpoint_network(octile_filenames[1,])
+# reference_net <- get_octile_endpoint_network(octile_filenames[26,])
+# 
+# # The edges are not connected.
+# as_sfnetwork(edges)
+# 
+# # 2 apply rotation matrix, this will do linear transformation of the data to the reference overview
+# # we will need to do a thin plate spline warp to get it really aligned after
+# # probably could do the warp without all this other algebra... but it feels like too far to warp...
+# # and I already had to figure out how to do the transformation algebra so I'm leaving it in
+# # apply transformation matrix
+# df_masked$nuclei_centroidx_reference <- NA
+# df_masked$nuclei_centroidy_reference <- NA
+# df_masked$GM130_centroidx_reference <- NA
+# df_masked$GM130_centroidy_reference <- NA
+# df_masked$reference_intersectionx <- NA
+# df_masked$reference_intersectiony  <- NA
+# 
+# transformed_centroids <- transform_reference_centroids_xy(df_masked %>% select(old_filename_generic_noside, nuclei_centroidx_overview, nuclei_centroidy_overview), info_df)
+# df_masked$nuclei_centroidx_reference <- transformed_centroids[,1]
+# df_masked$nuclei_centroidy_reference <- transformed_centroids[,2]
+# 
+# transformed_centroids <- transform_reference_centroids_xy(df_masked %>% select(old_filename_generic_noside, GM130_centroidx_overview, GM130_centroidy_overview), info_df)
+# df_masked$GM130_centroidx_reference <- transformed_centroids[,1]
+# df_masked$GM130_centroidy_reference <- transformed_centroids[,2]
+# 
+# transformed_centroids <- transform_reference_centroids_xy(df_masked %>% select(old_filename_generic_noside, intersectionx, intersectiony), info_df)
+# df_masked$reference_intersectionx <- transformed_centroids[,1]
+# df_masked$reference_intersectiony <- transformed_centroids[,2]
+#   
+# # create grid of points for TPS warp
+# # make TPS
+# computeTransform(data.matrix(fixed_lms), data.matrix(samples_lms), type='tps')
+# # apply warp
+# applyTransform(data.matrix(transformed_centroids[,1:2]), test_transform)
+# 
+# 
+# 
+# # adjust the angles 0-2pi and flip the treated side to match (it's opposite of above since they are already flipped from overview)
+# df_masked <- df_masked %>% mutate(positional_angle = case_when(positional_angle > 2*pi ~ positional_angle - 2*pi,
+#                                                                                  positional_angle < 0 ~ angle + 2*pi,
+#                                                                                  TRUE ~ positional_angle))
+# 
+# df_masked$positional_angle_old <- df_masked$positional_angle
+# df_masked <- df_masked %>% mutate(positional_angle = case_when(side == 'treated' & positional_angle <= pi ~ pi-positional_angle, side == 'treated' & positional_angle > pi ~ 3*pi - positional_angle, TRUE ~ positional_angle_old))
+# 
+# saveRDS(df_masked, file='combined_angles_positional_masked.Rda') 
+
+
 #### 0.2 Cellularity helpers ####
 mask_inter_area <- function(area_mask, baseline_roi, thresh_dist, res) {
   baseline_linestring <- st_linestring(baseline_roi$coords, dim='XY')
@@ -1027,7 +1097,7 @@ plot.windrose <- function(data, dirres = 10, color, control) {
   p.windrose <- ggplot(data = T_data, aes(x = dir.binned, y = z, fill = color, color = color)) +
       geom_bar(width = 1, linewidth = .5, stat='identity') +
       scale_x_discrete(drop = FALSE, labels = waiver()) +
-      scale_y_continuous(limits = c(0, 0.042), expand = c(0, 0)) + #,  breaks = c(0,.01,.02,.03,.04)) +
+      scale_y_continuous(limits = c(0, 0.11), expand = c(0, 0)) + #,  breaks = c(0,.01,.02,.03,.04)) +
       coord_polar(start = ((270-(dirres/2))) * pi/180, direction = -1) +
       scale_fill_manual(name = "treated", values = color, drop = FALSE) +
       scale_color_manual(name = "treated", values = c('black','black'), drop = FALSE) +
@@ -1270,6 +1340,8 @@ mask_filenames <- list.files(path="./imagej_rois/region_mask_rois/", pattern=".r
 # of a line radiating (more dumb word play) from the nuclei centroid towards its'
 # golgi centroid.
 
+
+#### 2.1 calculating and transforming data ####
 # load in the rois. There are 8, starting at the left (contralateral) nasal pit and moving ccw
 # this is counter-intuitive as I had already rotated all the stacks so that treated would be on the left side
 
@@ -1314,6 +1386,9 @@ df_masked$treatment <- as.factor(df_masked$treatment)
 df_masked$side <- as.factor(df_masked$side)
 df_masked$region_name <- as.factor(df_masked$region_name)
 df_baseline_masked <- filter_distance_from_octile_lines(df_masked, octile_filenames, info_df, 0,200)
+
+
+#### 2.2 overview heatmap plot ####
 for (treatment_i in 1:length(levels(df_baseline_masked$treatment))) {
   for (side_i in 1:2) {
     for (region_i in 1:length(levels(df_baseline_masked$region_name))) {
@@ -1373,105 +1448,167 @@ for (treatment_i in 1:length(levels(df_baseline_masked$treatment))) {
 }
 
 
+#### 3 Quadrant comparison and plotting ####
+# The windrose plots look good, but it would be nice to get a more quantitative
+# analysis of group differences. I will get relative amount in each quadrant
+# and compare to contralateral and DMSO groups
 
-# get_octile_endpoint_network <- function(octile_filename) {
-#   # load up the overview octile, make the rois into linestrings
-#   octile_rois <- read.ijzip(file.path("./imagej_rois/overview_octiles/", octile_filename), verbose = FALSE)
-#   octile_linestrings <- st_sfc(lapply(octile_rois, function(x) st_linestring(x$coords, dim="XY")))
-#   
-#   # pull out the roi endpoing only, we don't want the first point as they are same as endpoint
-#   octile_endpoints <- lapply(octile_linestrings, function(x) tail(st_coordinates(x), 1)[1:2])
-#   # find all combinations of these endpoint pairs
-#   combinations <- combn(1:length(octile_endpoints), 2)
-#   # make linestrings from each combination
-#   octile_endpoint_mesh <- st_sfc(mapply(function(x) st_linestring(c(st_point(c(octile_endpoints[[combinations[,x][1]]][1], octile_endpoints[[combinations[,x][1]]][2])), 
-#                                                                     st_point(c(octile_endpoints[[combinations[,x][2]]][1], octile_endpoints[[combinations[,x][2]]][2]))), dim="XY"), 1:ncol(combinations), SIMPLIFY = FALSE))
-#   # make it into a network
-#   octile_endpoint_network <- as_sfnetwork(octile_endpoint_mesh)
-#   # find all the points where the lines intersect and make them into points
-#   intersection_ps <- st_collection_extract(st_intersection(octile_endpoint_mesh), "POINT")
-#   # # add these points back into the network, which will remake the lines
-#   octile_endpoint_network <- st_network_blend(octile_endpoint_network, intersection_ps)
-#   return(octile_endpoint_network)
-# }
-# 
-# sample_net <- get_octile_endpoint_network(octile_filenames[1,])
-# reference_net <- get_octile_endpoint_network(octile_filenames[26,])
-# 
-# # The edges are not connected.
-# as_sfnetwork(edges)
-# 
-# # 2 apply rotation matrix, this will do linear transformation of the data to the reference overview
-# # we will need to do a thin plate spline warp to get it really aligned after
-# # probably could do the warp without all this other algebra... but it feels like too far to warp...
-# # and I already had to figure out how to do the transformation algebra so I'm leaving it in
-# # apply transformation matrix
-# df_masked$nuclei_centroidx_reference <- NA
-# df_masked$nuclei_centroidy_reference <- NA
-# df_masked$GM130_centroidx_reference <- NA
-# df_masked$GM130_centroidy_reference <- NA
-# df_masked$reference_intersectionx <- NA
-# df_masked$reference_intersectiony  <- NA
-# 
-# transformed_centroids <- transform_reference_centroids_xy(df_masked %>% select(old_filename_generic_noside, nuclei_centroidx_overview, nuclei_centroidy_overview), info_df)
-# df_masked$nuclei_centroidx_reference <- transformed_centroids[,1]
-# df_masked$nuclei_centroidy_reference <- transformed_centroids[,2]
-# 
-# transformed_centroids <- transform_reference_centroids_xy(df_masked %>% select(old_filename_generic_noside, GM130_centroidx_overview, GM130_centroidy_overview), info_df)
-# df_masked$GM130_centroidx_reference <- transformed_centroids[,1]
-# df_masked$GM130_centroidy_reference <- transformed_centroids[,2]
-# 
-# transformed_centroids <- transform_reference_centroids_xy(df_masked %>% select(old_filename_generic_noside, intersectionx, intersectiony), info_df)
-# df_masked$reference_intersectionx <- transformed_centroids[,1]
-# df_masked$reference_intersectiony <- transformed_centroids[,2]
-#   
-# # create grid of points for TPS warp
-# # make TPS
-# computeTransform(data.matrix(fixed_lms), data.matrix(samples_lms), type='tps')
-# # apply warp
-# applyTransform(data.matrix(transformed_centroids[,1:2]), test_transform)
-# 
-# 
-# 
-# # adjust the angles 0-2pi and flip the treated side to match (it's opposite of above since they are already flipped from overview)
-# df_masked <- df_masked %>% mutate(positional_angle = case_when(positional_angle > 2*pi ~ positional_angle - 2*pi,
-#                                                                                  positional_angle < 0 ~ angle + 2*pi,
-#                                                                                  TRUE ~ positional_angle))
-# 
-# df_masked$positional_angle_old <- df_masked$positional_angle
-# df_masked <- df_masked %>% mutate(positional_angle = case_when(side == 'treated' & positional_angle <= pi ~ pi-positional_angle, side == 'treated' & positional_angle > pi ~ 3*pi - positional_angle, TRUE ~ positional_angle_old))
-# 
-# saveRDS(df_masked, file='combined_angles_positional_masked.Rda') 
+df_baseline_masked <- df_baseline_masked  %>% mutate(treatment = factor(treatment, levels = c('DMSO', 'U0126', 'LY294002', 'U73122', '3Mix')))
+df_baseline_masked$flipped_positional_angle <- df_baseline_masked$positional_angle
+df_baseline_masked <- df_baseline_masked  %>% mutate(flipped_positional_angle = case_when((side == 'control' & positional_angle <= pi) ~ pi-positional_angle, (side == 'control' & positional_angle > pi) ~ 3*pi - positional_angle, TRUE ~ flipped_positional_angle))
+df_baseline_masked <- df_baseline_masked  %>% mutate(quad_bin = cut(flipped_positional_angle, breaks = c(0, pi/2, pi, 3*pi/2, 2*pi)))
 
+for (region_i in 1:(length(levels(df_baseline_masked$region_name))+1)) {
+  if (region_i == length(levels(df_baseline_masked$region_name))+1) {
+  bin_summary <- df_baseline_masked %>% group_by(sample_info, treatment, side) %>% drop_na(quad_bin) %>% count(quad_bin) %>% mutate(freq = n / sum(n))
+  region_name <- 'all'
+  } else {
+  bin_summary <- df_baseline_masked %>% filter(as.integer(region_name) == region_i) %>% group_by(sample_info, treatment, side) %>% drop_na(quad_bin) %>% count(quad_bin) %>% mutate(freq = n / sum(n))
+  region_name <- as.character(levels(df_baseline_masked$region_name)[region_i])
+  }
 
-#### 3 Cellularity #### 
-### Calculate cells per area in the masks above
-# This will match the file names of the two different ImageJ roi files we used
-# we will use this to calculate area
-matches <- data.frame()
-for (i in 1:length(baseline_mask_filenames)) {
-  match <- str_which(mask_filenames, str_replace(baseline_mask_filenames[i], '_baseline.roi', '.roi'))
-  matches <- rbind(matches, c(i, match))
+  group_bin_summary <- bin_summary %>% group_by(treatment, side, quad_bin) %>% dplyr::summarize(mean_freq = mean(freq))
+  
+  for (quadrant in 1:length(levels(bin_summary$quad_bin))) {
+    group_bin_summary_quad <- group_bin_summary %>% filter(quad_bin == levels(group_bin_summary$quad_bin)[quadrant])
+    bin_summary_quad <- bin_summary %>% filter(quad_bin == levels(group_bin_summary$quad_bin)[quadrant])
+    
+    graph_mean_df <- bin_summary_quad %>% group_by(treatment, side) %>%  summarise(
+      y0 = quantile(freq, 0.05),
+      y25 = quantile(freq, 0.25),
+      y50 = mean(freq),
+      y75 = quantile(freq, 0.75),
+      y100 = quantile(freq, 0.95),
+      ysd = sd(freq))
+    
+    p <- ggplot(data=graph_mean_df, aes(treatment, y50, fill = as.factor(side))) +
+      geom_col(stat = "identity", position = 'dodge') +
+      geom_errorbar(aes(ymin=y50, ymax=y50+ysd), position = 'dodge', width = 1) +
+      geom_point(data=bin_summary_quad, aes(treatment, freq, fill=side), size = 1, position=position_jitterdodge(jitter.width = 0.2)) +
+      theme(legend.position = "none") # + ylim(0,0.6)
+    file_name <- paste0("./figs/positional_avg_", region_name, '_', as.character(levels(group_bin_summary$quad_bin)[quadrant]), ".tiff", sep="")
+    ggsave(filename=file_name, p, width = 25, heigh = 15, units='cm')
+    print(p)
+    
+    
+    # pdf(paste0("./figs/positional_avg", as.character(levels(group_bin_summary$quad_bin)[quadrant]), "_contralateral.pdf"), width=10, height=6)
+    # p <- ggplot() + geom_bar(data = group_bin_summary_quad, aes(y=mean_freq, x = side), stat="identity") +
+    #   geom_jitter(data = bin_summary_quad, aes(x = side, y = freq), shape=16) +
+    #   # geom_errorbar(data = cellpose_summarise, aes(y=mean,x=side,ymin=mean-sd,ymax=mean+sd)) +
+    #   facet_wrap(~ treatment)
+    # print(p)
+    # dev.off()
+    
+    test<- aov(bin_summary_quad$freq ~  bin_summary_quad$treatment * bin_summary_quad$side)
+    print(file_name)
+    print(summary(test))
+    print(TukeyHSD(test))
+  }
 }
 
 
-# this bit of code here will calculate area and number of nuclei in that area for 'cellularity'
-res <- 0.2840910 # this is specific to the images for this project, they all have same xy resolution
-df_baseline_masked <- get_cellularity(df_baseline_masked, matches, mask_filenames, baseline_mask_filenames, 200, res)
+#### 4 Windrose plotting ####
+graphing_df <- df_baseline_masked #%>% filter(region_name != 'center')
+
+# it's possible the angles weren't flipped, can be done here just in case
+graphing_df <- flip_y_angles(graphing_df)
+
+# graphing_df$angle_deg <- graphing_df$angle * 180 / pi
+graphing_df$angle_deg <- as.numeric(graphing_df$angle) * (180 / pi)
+graphing_df <- graphing_df %>% drop_na(positional_angle)
+graphing_df$rel_z <- graphing_df$delta_z / graphing_df$distance
+graphing_df <- graphing_df %>% mutate(side_spd = case_when(side == 'control' ~ 0,
+                                                           side == 'treated' ~ 1))
+graphing_df <- graphing_df %>% unite(sample_side, sample_info, side, sep='_', remove=FALSE)
+
+graphing_df$treatment <- factor(graphing_df$treatment, levels = c('DMSO', 'U0126', 'LY294002', 'U73122', '3Mix'))
+graphing_df <- graphing_df %>% mutate(treatment = recode(treatment, '3Mix' = 'Triple'))
+graphing_df$side <- factor(graphing_df$side, levels = c('control', 'treated'))
+graphing_df <- graphing_df %>% mutate(side = recode(side, 'control' = 'contralateral'))
+
+for (i in 1:length(levels(graphing_df$treatment))) {
+  filter_data <- graphing_df %>% filter(as.integer(treatment) == i)
+  
+  # # png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_control_vsDMSO.png"), units='in', width=5, height=5, res=300)
+  # pdf(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_contralateral.pdf"), width=5, height=5)
+  # control_plot <- plot.windrose(filter_data %>% filter(side == 'contralateral'), 'white', dirres = 10)
+  # plot(control_plot)
+  # dev.off()
+  # # dev.off()
+  # 
+  # # png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_treated_vsDMSO.png"), units='in', width=5, height=5, res=300)
+  # pdf(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_treated.pdf"), width=5, height=5)
+  # treated_plot <- plot.windrose(filter_data %>% filter(side == 'treated'), 'red', dirres = 10)
+  # plot(treated_plot)
+  # dev.off()
+  # # dev.off()
+  
+  if (i == 1) {
+    pdf(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "combined.pdf"), width=5, height=5)
+    combined_plot <- plot.windrose(filter_data, 'white', dirres = 10)
+    plot(combined_plot)
+    dev.off()
+  }
+}
+
+## temp code
+for (i in 1:length(unique(filter_data$old_filename_generic_noside.x))) {
+  i = 6
+  further_filt <- filter_data %>% filter(old_filename_generic_noside.x == unique(filter_data$old_filename_generic_noside.x)[i])
+  plot(plot.windrose(further_filt %>% filter(side == 'contralateral'), 'white', dirres = 10))
+  plot(plot.windrose(further_filt %>% filter(side == 'treated'), 'red', dirres = 10))
+}
 
 
-### Check cellularity & plot it
-df_cellularity <- df_baseline_masked %>% group_by(treatment, side, t) %>% summarise(cells_per_sqmicron)
-df_cellularity <- df_cellularity %>% distinct() %>% drop_na()
-df_cellularity$cells_per_sqmicron <- as.numeric(df_cellularity$cells_per_sqmicron)
-df_cellularity <- df_cellularity %>% mutate(cells_per_mm2 = cells_per_sqmicron * 1000*1000)
 
-cell_plot <- ggplot(df_cellularity, aes(fill = side, y=cells_per_sqmicron, x=treatment)) +
-    geom_bar(position="dodge", stat="summary", fun=mean) + geom_errorbar(stat='summary', fun.data = mean_sdl, position = position_dodge(0.9))
-plot(cell_plot)
+graphing_positional_df <- df_baseline_masked #%>% filter(region_name != 'center')
+
+# it's possible the angles weren't flipped, can be done here just in case
+graphing_positional_df$flipped_positional_angle <- graphing_positional_df$positional_angle
+graphing_positional_df <- graphing_positional_df  %>% mutate(flipped_positional_angle = case_when((side == 'control' & positional_angle <= pi) ~ pi-positional_angle, (side == 'control' & positional_angle > pi) ~ 3*pi - positional_angle, TRUE ~ flipped_positional_angle))
 
 
-#### 4 Watson U2 tests ####
+# graphing_df$angle_deg <- graphing_df$angle * 180 / pi
+graphing_positional_df$angle_deg <- as.numeric(graphing_positional_df$positional_angle) * (180 / pi)
+graphing_positional_df <- graphing_positional_df %>% drop_na(positional_angle)
+graphing_positional_df$rel_z <- graphing_positional_df$delta_z / graphing_positional_df$distance
+graphing_positional_df <- graphing_positional_df %>% mutate(side_spd = case_when(side == 'control' ~ 0,
+                                                           side == 'treated' ~ 1))
+graphing_positional_df <- graphing_positional_df %>% unite(sample_side, sample_info, side, sep='_', remove=FALSE)
+
+graphing_positional_df$treatment <- factor(graphing_positional_df$treatment, levels = c('DMSO', 'U0126', 'LY294002', 'U73122', '3Mix'))
+graphing_positional_df <- graphing_positional_df %>% mutate(treatment = recode(treatment, '3Mix' = 'Triple'))
+graphing_positional_df$side <- factor(graphing_positional_df$side, levels = c('control', 'treated'))
+graphing_positional_df <- graphing_positional_df %>% mutate(side = recode(side, 'control' = 'contralateral'))
+
+for (i in 1:length(levels(graphing_positional_df$treatment))) {
+  filter_data <- graphing_positional_df %>% filter(as.integer(treatment) == i)
+  
+  # # png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_control_vsDMSO.png"), units='in', width=5, height=5, res=300)
+  # pdf(paste0("./figs/positional_windrose_", as.character(filter_data$treatment[1]), "_contralateral.pdf"), width=5, height=5)
+  # control_plot <- plot.windrose(filter_data %>% filter(side == 'contralateral'), 'white', dirres = 10)
+  # plot(control_plot)
+  # dev.off()
+  # # dev.off()
+  # 
+  # # png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_treated_vsDMSO.png"), units='in', width=5, height=5, res=300)
+  # pdf(paste0("./figs/positional_windrose_", as.character(filter_data$treatment[1]), "_treated.pdf"), width=5, height=5)
+  # treated_plot <- plot.windrose(filter_data %>% filter(side == 'treated'), 'red', dirres = 10)
+  # plot(treated_plot)
+  # dev.off()
+  # # dev.off()
+  
+  if (i == 1) {
+    filter_data$angle_deg <- as.numeric(filter_data$flipped_positional_angle) * (180 / pi)
+    pdf(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "combined.pdf"), width=5, height=5)
+    combined_plot <- plot.windrose(filter_data, 'white', dirres = 10)
+    plot(combined_plot)
+    dev.off()
+  }
+}
+
+
+#### 5 Watson U2 tests ####
 ### First do some traditional summary statistics
 circular_statistics <- list()
 # get actual circle stats for export
@@ -1547,129 +1684,7 @@ gID <- as.integer(as.factor(cellpose_DMSO_control$id))
 WalraffTest(cdat,ndat,g,gID)
 
 
-#### 5 Quadrant comparison and plotting ####
-# The windrose plots look good, but it would be nice to get a more quantitative
-# analysis of group differences. I will get relative amount in each quadrant
-# and compare to contralateral and DMSO groups
-
-df_baseline_masked <- df_baseline_masked  %>% mutate(treatment = factor(treatment, levels = c('DMSO', 'U0126', 'LY294002', 'U73122', '3Mix')))
-df_baseline_masked$flipped_positional_angle <- df_baseline_masked$positional_angle
-df_baseline_masked <- df_baseline_masked  %>% mutate(flipped_positional_angle = case_when((side == 'control' & positional_angle <= pi) ~ pi-positional_angle, (side == 'control' & positional_angle > pi) ~ 3*pi - positional_angle, TRUE ~ flipped_positional_angle))
-df_baseline_masked <- df_baseline_masked  %>% mutate(quad_bin = cut(flipped_positional_angle, breaks = c(0, pi/2, pi, 3*pi/2, 2*pi)))
-
-bin_summary <- df_baseline_masked %>% group_by(sample_info, treatment, side) %>% drop_na(quad_bin) %>% count(quad_bin) %>% mutate(freq = n / sum(n))
-group_bin_summary <- bin_summary %>% group_by(treatment, side, quad_bin) %>% dplyr::summarize(mean_freq = mean(freq))
-
-for (quadrant in 1:length(levels(bin_summary$quad_bin))) {
-  group_bin_summary_quad <- group_bin_summary %>% filter(quad_bin == levels(group_bin_summary$quad_bin)[quadrant])
-  bin_summary_quad <- bin_summary %>% filter(quad_bin == levels(group_bin_summary$quad_bin)[quadrant])
-  
-  graph_mean_df <- bin_summary_quad %>% group_by(treatment, side) %>%  summarise(
-    y0 = quantile(freq, 0.05),
-    y25 = quantile(freq, 0.25),
-    y50 = mean(freq),
-    y75 = quantile(freq, 0.75),
-    y100 = quantile(freq, 0.95),
-    ysd = sd(freq))
-  
-  p <- ggplot(data=graph_mean_df, aes(treatment, y50, fill = as.factor(side))) +
-    geom_col(stat = "identity", position = 'dodge') +
-    geom_errorbar(aes(ymin=y50, ymax=y50+ysd), position = 'dodge', width = 1) +
-    geom_point(data=bin_summary_quad, aes(treatment, freq, fill=side), size = 1, position=position_jitterdodge(jitter.width = 0.2)) +
-    theme(legend.position = "none") # + ylim(0,0.6)
-  file_name <- paste0("./figs/positional_avg", as.character(levels(group_bin_summary$quad_bin)[quadrant]), ".tiff", sep="")
-  ggsave(filename=file_name, p, width = 25, heigh = 15, units='cm')
-  print(p)
-  
-  
-  # pdf(paste0("./figs/positional_avg", as.character(levels(group_bin_summary$quad_bin)[quadrant]), "_contralateral.pdf"), width=10, height=6)
-  # p <- ggplot() + geom_bar(data = group_bin_summary_quad, aes(y=mean_freq, x = side), stat="identity") +
-  #   geom_jitter(data = bin_summary_quad, aes(x = side, y = freq), shape=16) +
-  #   # geom_errorbar(data = cellpose_summarise, aes(y=mean,x=side,ymin=mean-sd,ymax=mean+sd)) +
-  #   facet_wrap(~ treatment)
-  # print(p)
-  # dev.off()
-  
-  test<- aov(bin_summary_quad$freq ~  bin_summary_quad$treatment * bin_summary_quad$side)
-  print(as.character(levels(group_bin_summary$quad_bin)[quadrant]))
-  print(summary(test))
-  print(TukeyHSD(test))
-}
-
-
-
-#### 6 Windrose plotting ####
-graphing_df <- df_baseline_masked #%>% filter(region_name != 'center')
-
-# it's possible the angles weren't flipped, can be done here just in case
-graphing_df <- flip_y_angles(graphing_df)
-
-# graphing_df$angle_deg <- graphing_df$angle * 180 / pi
-graphing_df$angle_deg <- as.numeric(graphing_df$angle) * (180 / pi)
-graphing_df <- graphing_df %>% drop_na(positional_angle)
-graphing_df$rel_z <- graphing_df$delta_z / graphing_df$distance
-graphing_df <- graphing_df %>% mutate(side_spd = case_when(side == 'control' ~ 0,
-                                                           side == 'treated' ~ 1))
-graphing_df <- graphing_df %>% unite(sample_side, sample_info, side, sep='_', remove=FALSE)
-
-graphing_df$treatment <- factor(graphing_df$treatment, levels = c('DMSO', 'U0126', 'LY294002', 'U73122', '3Mix'))
-graphing_df <- graphing_df %>% mutate(treatment = recode(treatment, '3Mix' = 'Triple'))
-graphing_df$side <- factor(graphing_df$side, levels = c('control', 'treated'))
-graphing_df <- graphing_df %>% mutate(side = recode(side, 'control' = 'contralateral'))
-
-for (i in 1:length(levels(graphing_df$treatment))) {
-  filter_data <- graphing_df %>% filter(as.integer(treatment) == i)
-  
-  # # png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_control_vsDMSO.png"), units='in', width=5, height=5, res=300)
-  # pdf(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_contralateral.pdf"), width=5, height=5)
-  # control_plot <- plot.windrose(filter_data %>% filter(side == 'contralateral'), 'white', dirres = 10)
-  # plot(control_plot)
-  # dev.off()
-  # # dev.off()
-  # 
-  # # png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_treated_vsDMSO.png"), units='in', width=5, height=5, res=300)
-  # pdf(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_treated.pdf"), width=5, height=5)
-  # treated_plot <- plot.windrose(filter_data %>% filter(side == 'treated'), 'red', dirres = 10)
-  # plot(treated_plot)
-  # dev.off()
-  # # dev.off()
-  
-  if (i == 1) {
-    pdf(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "combined.pdf"), width=5, height=5)
-    combined_plot <- plot.windrose(filter_data, 'white', dirres = 10)
-    plot(combined_plot)
-    dev.off()
-  }
-}
-
-## temp code
-for (i in 1:length(unique(filter_data$old_filename_generic_noside.x))) {
-  i = 6
-  further_filt <- filter_data %>% filter(old_filename_generic_noside.x == unique(filter_data$old_filename_generic_noside.x)[i])
-  plot(plot.windrose(further_filt %>% filter(side == 'contralateral'), 'white', dirres = 10))
-  plot(plot.windrose(further_filt %>% filter(side == 'treated'), 'red', dirres = 10))
-}
-
-for (i in 1:length(levels(graphing_df$treatment))) {
-  filter_data <- graphing_df %>% filter(as.integer(treatment) == i)
-  
-  # png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_control_vsDMSO.png"), units='in', width=5, height=5, res=300)
-  pdf(paste0("./figs/positional_windrose_", as.character(filter_data$treatment[1]), "_contralateral_vsDMSO.pdf"), width=5, height=5)
-  control_plot <- plot.windrose(filter_data %>% filter(side == 'contralateral'), c('white', 'grey'), dirres = 10, graphing_df %>% filter(treatment == 'DMSO'))
-  plot(control_plot)
-  dev.off()
-  # dev.off()
-  
-  # png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_treated_vsDMSO.png"), units='in', width=5, height=5, res=300)
-  pdf(paste0("./figs/positional_windrose_", as.character(filter_data$treatment[1]), "_treated_vsDMSO.pdf"), width=5, height=5)
-  treated_plot <- plot.windrose(filter_data %>% filter(side == 'treated'), c('red', 'grey'), dirres = 10, graphing_df %>% filter(treatment == 'DMSO'))
-  plot(treated_plot)
-  dev.off()
-  # dev.off()
-}
-
-
-#### 7 Mollweide Plots ####
+#### 6 Mollweide Plots ####
 df_3d_proj <- df_baseline_masked
 df_3d_proj$lat <- (pi/2 - acos(df_3d_proj$unit_z))*180/pi
 df_3d_proj$lon <- df_3d_proj$angle*180/pi + 270
@@ -1764,7 +1779,7 @@ image_browse(imgs)
 image_write(imgs, path = paste0("./figs/flatearth_combined.png"), format = "png")
 
 
-#### 6 BPNME statistics ###
+#### 7 BPNME statistics ####
 # This is a much better way of doing the stats for these data, but unfortunately
 # This is all old code that does not work with my data
 # There are too many angle measurements per sample, it just can't run...
@@ -1792,3 +1807,30 @@ saveRDS(fit.U73_corner, 'U73_corner_fit.rds')
 fit.U73_corner <- readRDS('U73_corner_fit.rds')
 
 ### END BPNME Stats ###
+
+
+#### 8 Cellularity #### 
+### Calculate cells per area in the masks above
+# This will match the file names of the two different ImageJ roi files we used
+# we will use this to calculate area
+matches <- data.frame()
+for (i in 1:length(baseline_mask_filenames)) {
+  match <- str_which(mask_filenames, str_replace(baseline_mask_filenames[i], '_baseline.roi', '.roi'))
+  matches <- rbind(matches, c(i, match))
+}
+
+
+# this bit of code here will calculate area and number of nuclei in that area for 'cellularity'
+res <- 0.2840910 # this is specific to the images for this project, they all have same xy resolution
+df_baseline_masked <- get_cellularity(df_baseline_masked, matches, mask_filenames, baseline_mask_filenames, 200, res)
+
+
+### Check cellularity & plot it
+df_cellularity <- df_baseline_masked %>% group_by(treatment, side, t) %>% summarise(cells_per_sqmicron)
+df_cellularity <- df_cellularity %>% distinct() %>% drop_na()
+df_cellularity$cells_per_sqmicron <- as.numeric(df_cellularity$cells_per_sqmicron)
+df_cellularity <- df_cellularity %>% mutate(cells_per_mm2 = cells_per_sqmicron * 1000*1000)
+
+cell_plot <- ggplot(df_cellularity, aes(fill = side, y=cells_per_sqmicron, x=treatment)) +
+  geom_bar(position="dodge", stat="summary", fun=mean) + geom_errorbar(stat='summary', fun.data = mean_sdl, position = position_dodge(0.9))
+plot(cell_plot)
