@@ -17,12 +17,12 @@ I think most of the columns are self-explanatory except:
    See the example image below:
    ![Example of angle adjustment drawn on an overview image](/Readme_images/Golgi_baseline_angle_example.png)
 3. Cellpose models are included for detecting nuclei and GM130. Both models were trained on images of Hoechst and GM130 
-stained tissue sections from the chicken FNP. Every third image in the z-direction was labelled in ImageJ by hand. These 
+stained tissue sections from the chick FNP. Every third image in the z-direction was labelled in ImageJ by hand. These 
 labelled images were used to train with the Cellpose 'nuclei' model as the base. The models were refined further by 
 'human-in-the-loop' training and correcting on unlabelled images. Using this method we only had to hand-correct ~5-10 images
 before it was quite good at segmenting.
 4. I will include the cellpose segmented images as well. I tried running the code without the GPU and it is very slow.
-I imagine many people running this will not have access to a GPU.
+I imagine many people running this will not have access to a GPU, unfortunately.
 
 ## Actually starting the analysis
 ### 1. (optional) run_cellpose_Golgi.py
@@ -38,30 +38,56 @@ So, in a nuclei image, pixel values of 0 are background, while non-zero values a
   1. First it loads in all the cellpose output mask files.
   2. Next it finds the centroids of each mask id - this is actually a pretty slow process, might even be slower than running
   cellpose! I've sped it up a bit by drawing bounding boxes around the mask so the entire image array isn't fed into the centroid
-  finding code each time, but even finding those bounding boxes takes time.
+  finding code each time, but even finding those bounding boxes takes time. Could probably just get center of bounding box
+  to approximate centroid, but let's be accurate and get the true centroid.
   3. Match nuclei and Golgi centroids to their nearest neighbor. Sometimes the closest neighbor actually isn't the 'best' match.
   I get around this by using a [linear sum assignment](https://en.wikipedia.org/wiki/Assignment_problem) to find matching pairs, with
   the Euclidian distance as the 'cost' that the algorithm will minimize.
   4. Find a line between the paired nuclei and Golgi, convert the line to a unit vector, and use the i,j,k components to calculate the angle
   between them. It outputs all this data into a .csv for further analysis in R.
 
-- Running this code should generate an image like the middle image below showing nuclei in blue and Golgi in yellow/green 
+- Running this code will generate an image like the middle image below showing nuclei in blue and Golgi in yellow/green 
 with a line drawn between the centroids.
 ![Diagram of centroids and filtering](/Readme_images/Golgi_filtering_example.png)
 
 ### 3. angle_analysis.R
-- Again, I generally run R scripts line by line, but I tried to put most of the steps in functions to reduce clutter.
+This contains many functions and tools for analyzing the data, many of which are not going to appear in the manuscript,
+but I do not have the heart to delete them. They may be useful to someone! My pipeline has changed a lot in the last few
+months and the code has many deprecated sections, but again, I feel they could be useful to other scientists.
+- I generally run R scripts line by line, but I tried to put most of the steps in functions to reduce clutter.
+You can safely run the first ~1200 lines at once to load up all the libraries and functions.
 - First the code pulls in all the results .csv files generated from cellpose_angle_helpers.py, combines them into a large dataframe,
 and cleans them up.
 - I drew two rois in ImageJ to help filter the data:
   - The first is a freehand closed drawing around the mesenchyme, excluding
   any ectoderm or neurectoderm. In the right image in the above triptych, the red dots are cells excluded from this roi.
-  - The second roi is a line I draw along the globular process. The R code will only analyze cells within 200um of this line, 
+  - DEPRECATED: The second roi is a line I draw along the globular process. The R code will only analyze cells within 200um of this line, 
   which is represented as the black dots in the above image.
-- Watson U-squared test is used to compare the distribution between the treated and contralateral sides of the face.
-This analysis is only performed on the 2D data.
-- The distribution of angles in 2D are plotted with a windrose histogram combining the relative number of pairs per sample
-across treatment and side of the FNP.
-- The distribution of angles in 3D are plotted with a Mollweide projection (a 'flatearth' plot) heatmap.
+- NEW (BETTER): I drew 4 pts in ImageJ on the low-res overview image of the entire FNP and in the same locations on the 
+high-res confocal z-stacks. These points are used to transform the two z-stacks to a single coordinate system of the entire
+tissue (see image below, you can see the outline of the two z-stacks in the overview image).
+![overview image with landmarks and z-stack locations highlighted](/Readme_images/overview_angle_lms.png)
+  - On the overview image I draw 8 line rois ('octiles') around the tissue edges. These rois are used to determine Golgi
+  'positional angle', which will be described more later. These rois are used to filter nuclei a certain distance from 
+  the FNP ectoderm, similar but less subjective than the previous roi method. Note in the below plot of nuclei positions,
+  the black are 200 um from the baseline, and the pink? salmon? ones are further. The ectoderm and neurectoderm nuclei
+  have already been removed before transformation so they do not appear in this graph (red dots in triptych above). A third 
+  landmark would help anchor the 'y' scale better, but it is not necessary for this analysis.
+![overview image with octile rois](/Readme_images/overview_octile_filtered.png)
 
-![windrose and flatearth plots](/Readme_images/Golgi_R_output.png)
+- For most of the analysis the z-component of the angles are removed.
+- Golgi angle is simply the angle formed between the nucleus and the Golgi. Positional orientation, or positional 'angle',
+is easier to describe with an image than writing, so see the cartoon below. Basically it is the distance along the octile 
+roi line converted into an angle. As such, it is not truly angular data, but just a convenient way to present the data.
+The positional angle describes where along the tissue the Golgi is 'pointing'.
+![overview image with octile rois](/Readme_images/positional_angle_diagram.png)
+- Watson U-squared test is used to compare Golgi angle distribution between the treated and contralateral sides of the face.
+This analysis is only performed on the 2D data.
+- The distribution of angles and positional angle in 2D are plotted with a windrose histogram combining the relative number 
+of pairs per sample across treatment and side of the FNP.
+- The distribution of Golgi angle in 3D are plotted with a Mollweide projection (a 'flatearth' plot) heatmap. Not used in
+manuscript.
+- The position along the octiles where the Golgi intersect can be used to generate a heatmap. This also is not in the manuscript
+  (except in the methods cartoon).
+
+![windrose and flatearth plots](/Readme_images/Golgi_results_github.png)

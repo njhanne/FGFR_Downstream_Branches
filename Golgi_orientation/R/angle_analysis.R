@@ -1,6 +1,6 @@
 #### 0.0 Load libraries for packages ####
 # Uncomment and run this the first time to make sure everything gets installed
-# install.packages(c('circular', 'plyr', 'dplyr', 'tidyr', 'stringr', 'RImageJROI', 'sf', 'terra', 'ggplot2', 'RColorBrewer', 'Hmisc', 'svglite', 'magick'))
+# install.packages(c('circular', 'plyr', 'dplyr', 'tidyr', 'stringr', 'RImageJROI', 'sf', 'terra', 'ggplot2', 'RColorBrewer', 'Hmisc', 'svglite', 'magick', 'smoothr))
 # if terra takes more than 60s to download it will fail
 # run this line: options(timeout = max(1000, getOption("timeout")))
 
@@ -20,6 +20,7 @@ library(sf)
 library(sfnetworks)
 library(lwgeom)
 library(Morpho)
+library(smoothr)
 
 # needed for 'globe' plots
 library(terra)
@@ -434,7 +435,7 @@ generate_overview_positional_LUT <- function(overview_octile_rois, slices = 720)
   
   polygon <- bbox %>% lwgeom::st_split(linestrings) %>% st_collection_extract("POLYGON")
   poly_lms <- polygon[2] # hopefully this isn't random!
-  smooth_poly <- smooth(poly_lms, method = "ksmooth", smoothness = 20)
+  smooth_poly <- smoothr::smooth(poly_lms, method = "ksmooth", smoothness = 20)
   smooth_linestring <- st_cast(smooth_poly, 'LINESTRING')
   endpts <- st_line_sample(linestrings, sample=0)
   st_nearest_points(endpts, smooth_linestring) %>% {. ->> connecting_linestrings}
@@ -1097,7 +1098,7 @@ plot.windrose <- function(data, dirres = 10, color, control) {
   p.windrose <- ggplot(data = T_data, aes(x = dir.binned, y = z, fill = color, color = color)) +
       geom_bar(width = 1, linewidth = .5, stat='identity') +
       scale_x_discrete(drop = FALSE, labels = waiver()) +
-      scale_y_continuous(limits = c(0, 0.11), expand = c(0, 0)) + #,  breaks = c(0,.01,.02,.03,.04)) +
+      scale_y_continuous(limits = c(0, 0.1), expand = c(0, 0)) + #,  breaks = c(0,.01,.02,.03,.04)) +
       coord_polar(start = ((270-(dirres/2))) * pi/180, direction = -1) +
       scale_fill_manual(name = "treated", values = color, drop = FALSE) +
       scale_color_manual(name = "treated", values = c('black','black'), drop = FALSE) +
@@ -1481,14 +1482,14 @@ for (region_i in 1:(length(levels(df_baseline_masked$region_name))+1)) {
       y100 = quantile(freq, 0.95),
       ysd = sd(freq))
     
-    p <- ggplot(data=graph_mean_df, aes(treatment, y50, fill = as.factor(side))) +
-      geom_col(stat = "identity", position = 'dodge') +
-      geom_errorbar(aes(ymin=y50, ymax=y50+ysd), position = 'dodge', width = 1) +
-      geom_point(data=bin_summary_quad, aes(treatment, freq, fill=side), size = 1, position=position_jitterdodge(jitter.width = 0.2)) +
-      theme(legend.position = "none") # + ylim(0,0.6)
+    # p <- ggplot(data=graph_mean_df, aes(treatment, y50, fill = as.factor(side))) +
+    #   geom_col(stat = "identity", position = 'dodge') +
+    #   geom_errorbar(aes(ymin=y50, ymax=y50+ysd), position = 'dodge', width = 1) +
+    #   geom_point(data=bin_summary_quad, aes(treatment, freq, fill=side), size = 1, position=position_jitterdodge(jitter.width = 0.2)) +
+    #   theme(legend.position = "none") # + ylim(0,0.6)
     file_name <- paste0("./figs/positional_avg_", region_name, '_', as.character(levels(group_bin_summary$quad_bin)[quadrant]), ".tiff", sep="")
-    ggsave(filename=file_name, p, width = 25, heigh = 15, units='cm')
-    print(p)
+    # ggsave(filename=file_name, p, width = 25, heigh = 15, units='cm')
+    # print(p)
     
     
     # pdf(paste0("./figs/positional_avg", as.character(levels(group_bin_summary$quad_bin)[quadrant]), "_contralateral.pdf"), width=10, height=6)
