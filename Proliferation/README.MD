@@ -8,7 +8,7 @@ functions.
 with the 40x objective. The fluorescent images are RGB since they are captured with a camera, not by the scope itself.
 The pHH3 images are brightfield. The rgb_to_stack.py script converts all the RGB images to 8bit images then combines them into
 a stack. It also inverts the pHH3 images so that the positive cells appear bright and the background appears dark.
-![convert rgb to 8bit stack](/Readme_images/phh3_rbg_to_stack.png)
+![convert rgb to 8bit stack](/Readme_images/phh3_rgb_to_stack.png)
 2. I used the 'in the loop' hand training function of Cellpose 2 to train models to segment the nuclei and pHH3 stained images.
 3. Use the 'cellpoce_cmd.txt' command to find all the cells in the stacks. You need to run it twice, once for DAPI/Hoechst
 labeled nuclei then again for the pHH3 labeled nuclei. This generates some pngs labelmaps where segmented object index
