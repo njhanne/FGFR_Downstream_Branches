@@ -80,7 +80,7 @@ tissue (see image below, you can see the outline of the two z-stacks in the over
 is easier to describe with an image than writing, so see the cartoon below. Basically it is the distance along the octile 
 roi line converted into an angle. As such, it is not truly angular data, but just a convenient way to present the data.
 The positional angle describes where along the tissue the Golgi is 'pointing'.
-![overview image with octile rois](/Readme_images/positional_angle_diagram.png)
+<img src="/Readme_images/positional_angle_diagram.png" width=50% height=50%>
 - Watson U-squared test is used to compare Golgi angle distribution between the treated and contralateral sides of the face.
 This analysis is only performed on the 2D data.
 - The distribution of angles and positional angle in 2D are plotted with a windrose histogram combining the relative number 

@@ -524,6 +524,10 @@ levels(gdf_mirrored$treatment_mirror)
 
 contra_DMSO_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "contra_DMSO")])
 treat_DMSO_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "treat_DMSO")])
+
+contra_LY_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "contra_LY294002")])
+treat_LY_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "treat_LY294002")])
+
 # contra_triple_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "contra_triple")])
 # treat_triple_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "treat_triple")])
 
@@ -534,11 +538,17 @@ model_head_lm <- GPA_mirrored_contra$coords[,, which(dimnames(GPA_mirrored_contr
 alt_lm <- gdf_mirrored$coords[,, which(dimnames(gdf_mirrored$coords)[[3]] == "treated_chick_ctr_23")]
 
 # Create morphed meshes
-model_DMSO_mesh <- tps3d(head_mesh, as.matrix(og_lm), atlas_head_lm, threads = 1)
+# model_DMSO_mesh <- tps3d(head_mesh, as.matrix(og_lm), atlas_head_lm, threads = 1)
 model_DMSO_mesh <- tps3d(head_mesh, as.matrix(og_lm), alt_lm, threads = 1)
 
 contra_DMSO_mesh <- tps3d(model_DMSO_mesh, as.matrix(atlas_head_lm), contra_DMSO_mean_shape, threads = 1)
 treat_DMSO_mesh <- tps3d(model_DMSO_mesh, as.matrix(atlas_head_lm), treat_DMSO_mean_shape, threads = 1)
+
+contra_LY_mesh <- tps3d(model_DMSO_mesh, as.matrix(atlas_head_lm), contra_LY_mean_shape, threads = 1)
+treat_LY_mesh <- tps3d(model_DMSO_mesh, as.matrix(atlas_head_lm), treat_LY_mean_shape, threads = 1)
+
+
+
 
 PC1 = PCA_both_sides$x[,1] # get pc1
 PC2 = PCA_both_sides$x[,2] # get pc2
@@ -577,14 +587,14 @@ writePLY("./output/treated_DMSO_mesh.ply")
 rgl.close()
 
 open3d(zoom=0.75, windowRect = c(0,0, 1000, 700), userMatrix = frontal)
-shade3d(contra_triple_mesh, color="gray", alpha=1, specular='black')
-rgl.snapshot("./figs/Morph_contralateral_triple_frontal_head.png", top = TRUE)
+shade3d(contra_LY_mesh, color="gray", alpha=1, specular='black')
+rgl.snapshot("./figs/Morph_contralateral_LY_frontal_head.png", top = TRUE)
 writePLY("./output/contralateral_triple_mesh.ply")
 rgl.close()
 
 open3d(zoom=0.75, windowRect = c(0,0, 1000, 700), userMatrix = frontal)
-shade3d(treat_triple_mesh, color="gray", alpha=1, specular='black')
-rgl.snapshot("./figs/Morph_treated_triple_frontal_head.png", top = TRUE)
+shade3d(treat_LY_mesh, color="gray", alpha=1, specular='black')
+rgl.snapshot("./figs/Morph_treated_LY_frontal_head.png", top = TRUE)
 writePLY("./output/treated_triple_mesh.ply")
 rgl::close3d()
 
@@ -595,7 +605,7 @@ open3d(zoom = 0.75, userMatrix = heatmap_frontal, windowRect = c(0, 0, 1000, 700
 pdf("./figs/heatmap_PC1_pt05_to_-0pt1_legend.pdf", width = 2.5, height = 6.5)
 meshDist(PC2_ctrl, PC2_trt, rampcolors = c("blue", "white", "red"), sign = TRUE) 
 meshDist(PC1_ctrl, PC1_trt, rampcolors = c("blue", "white", "red"), sign = TRUE) 
-rgl.snapshot("./figs/heatmap_PC1_pt05_to_-0pt1.png", top = TRUE) # this one captures 3d output
+rgl.snapshot("./figs/heatmap_PC1_0_to_0pt1.png", top = TRUE) # this one captures 3d output
 rgl::close3d() # this one captures the heatmap legend as pdf
 dev.off()
 
