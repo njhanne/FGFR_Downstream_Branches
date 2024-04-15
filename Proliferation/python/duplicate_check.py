@@ -1,6 +1,7 @@
 # I noticed some of the images in the phh3 stack appear to be from the same sample, just different views
 # This code will help detect those similarities to find duplicates
 # https://stackoverflow.com/a/67477060
+# https://docs.opencv.org/4.x/d4/dc6/tutorial_py_template_matching.html
 
 import pandas as pd
 import cv2
@@ -64,7 +65,7 @@ for groups in image_info['group_side'].unique():
     image_path = [image_path for image_path in image_paths if Path(image_path).name == new_filename]
     r, template_image = cv2.imreadmulti(str(image_path[0]), [], cv2.IMREAD_UNCHANGED)
 
-    match_images = group_info[group_info.index > group_info.iloc[idx].name]
+    match_images = group_info[group_info.index > group_info.iloc[idx].name] # this prevents redoing comparisons
     for match_i in range(0, match_images.shape[0]):
       match_filename = match_images.iloc[match_i].sample_side + '_40x.tif'
       match_path = [image_path for image_path in image_paths if Path(image_path).name == match_filename]
