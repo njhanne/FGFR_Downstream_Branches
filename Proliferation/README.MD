@@ -11,7 +11,10 @@ a stack. It also inverts the pHH3 images so that the positive cells appear brigh
 ![convert rgb to 8bit stack](/Readme_images/phh3_rgb_to_stack.png)
 2. I used the 'in the loop' hand training function of Cellpose 2 to train models to segment the nuclei and pHH3 stained images.
 3. Use the 'cellpoce_cmd.txt' command to find all the cells in the stacks. You need to run it twice, once for DAPI/Hoechst
-labeled nuclei then again for the pHH3 labeled nuclei. This generates some pngs labelmaps where segmented object index
+labeled nuclei then again for the pHH3 labeled nuclei. It is easier to just use the 'run_cellpose_proliferation.py' instead, but
+note you will need to edit the script to specify if you are using cuda or not.
+
+This generates some pngs labelmaps where segmented object index
 is the value of the pixel. So nuclei 221 will have a grey value of 221 in the image, the background will be 0.
 ![cellpose output](/Readme_images/proliferation_cellpose.png)
 

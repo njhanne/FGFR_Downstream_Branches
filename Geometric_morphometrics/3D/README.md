@@ -111,3 +111,14 @@ Next I draw 4-5 points around the outside of the nasal pit and resample the line
 The semi-landmarks are a grid of 3x3 landmarks from the nasal pit to the midline of the FNP. The 'rows' follow a similar spacing as the midline curve-semilandmarks. Repeat for the other side of the face. The below figure shows all fiducial landmarks, the center curve semilandmarks, and the right side semilandmarks.
 
 ![right-side-lms](/Readme_images/semi-landmarks.png)
+
+## Analysis
+Almost the entirety of the analysis code was adapted from Marta Vidal Garcia. Git blame will show 'Nicholas Hanne'
+as the editor for many lines, but they are mostly edits to the existing work of Marta. Thank you! All of the analysis
+is performed in R using [Morpho](https://cran.r-project.org/web/packages/Morpho/Morpho.pdf) and [geomorph](https://cran.r-project.org/web/packages/geomorph/geomorph.pdf).
+Explaining GM analysis is maybe beyond the scope of this readme, but our R scripts are well commented (imo) and the 
+official documentation linked in the previous sentence are extremely helpful.
+
+'GMM_analyses.R' should be run before 'Asymmetry.R'.
+
+![GMM_analysis.R output](/Readme_images/3D_GM.png)
