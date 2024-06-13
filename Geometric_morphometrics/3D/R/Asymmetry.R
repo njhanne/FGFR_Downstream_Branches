@@ -817,3 +817,60 @@ cat("INTEGRATION on the face comparison - CTRL vs TREATMENT", capture.output(sum
     file="./output/Integration_face_comparisons_CTRL_TRIPLE_May2023.txt", sep="\n", append=TRUE)
 
 
+### PLS without PC1
+# remove PC1 from gpa and redo PLS
+PCA_head <- gm.prcomp(GPA_geomorph$coords)
+PC1_regression <- procD.lm(GPA_geomorph$coords~PCA_head$x[,1])
+new_shapes <- GPA_geomorph$coords + matrix(PC1_regression$residuals, 51,3)
+
+# Integration face all
+face_integration_revised <- integration.test(new_shapes[-non.sym,,], partition.gp = side, iter = 999)
+summary(face_integration_revised) # Test summary
+p<- plot(face_integration_revised) # PLS plot
+make_ggplot(p)
+plotx <- p$plot.args$x
+ploty <- p$plot.args$y
+plot_df <- stack(plotx)
+plot_df <- plot_df %>% rename(x = values)
+plot_df <- plot_df %>% mutate(y = ploty)
+plot_df <- plot_df %>% mutate(treatment = classifiers$treatment)
+
+pdf("./figs/integration_pls_new.pdf", width = 7.5, height = 6)
+ggplot(plot_df, aes(x=x, y=y, color = treatment)) +
+  geom_point(shape=16) +
+  scale_fill_manual(values=get_palette(FALSE)) +
+  geom_smooth(method=lm, se=FALSE) +
+  geom_smooth(method=lm, se=FALSE,aes(group=1), color='black') +
+  coord_fixed()
+dev.off()
+
+# Compare integration of the face between treatment and control
+face_integration_CTRL_revised <- integration.test(new_shapes[-non.sym, , which(classifiers$treatment == "DMSO")], 
+                                          partition.gp = side, iter = 999)
+
+face_integration_Triple_revised <- integration.test(new_shapes[-non.sym, , which(classifiers$treatment == "Triple")], 
+                                            partition.gp = side, iter = 999)
+face_integration_U0_revised <- integration.test(new_shapes[-non.sym, , which(classifiers$treatment == "U0126")], 
+                                        partition.gp = side, iter = 999)
+face_integration_LY_revised <- integration.test(new_shapes[-non.sym, , which(classifiers$treatment == "LY294002")], 
+                                        partition.gp = side, iter = 999)
+face_integration_U73_revised <- integration.test(new_shapes[-non.sym, , which(classifiers$treatment == "U73122")], 
+                                         partition.gp = side, iter = 999)
+
+# these p-values are used in manuscript
+summary(face_integration_CTRL_revised) # Test summary
+summary(face_integration_Triple_revised) # Test summary
+plot(face_integration_CTRL_revised) # PLS plot
+plot(face_integration_Triple_revised)
+summary(face_integration_U0_revised) # Test summary
+summary(face_integration_LY_revised) # Test summary
+summary(face_integration_U73_revised) # Test summary
+
+PLS_comparison_Triple_revised <- compare.pls(CTRL = face_integration_CTRL_revised, TRIPLE = face_integration_Triple_revised)
+summary(PLS_comparison_Triple_revised)
+PLS_comparison_U0_revised <- compare.pls(CTRL = face_integration_CTRL_revised, U0126 = face_integration_U0_revised)
+summary(PLS_comparison_U0_revised)
+PLS_comparison_LY_revised <- compare.pls(CTRL = face_integration_CTRL_revised, LY294002 = face_integration_LY_revised)
+summary(PLS_comparison_LY_revised)
+PLS_comparison_U73_revised <- compare.pls(CTRL = face_integration_CTRL_revised, U73122 = face_integration_U73_revised)
+summary(PLS_comparison_U73_revised)

@@ -442,6 +442,8 @@ dev.off()
 Pdist <- ShapeDist(GPA_head$coords, GPA_head$consensus)
 
 # make the dataframe for better ggplot plotting
+classifiers <- classifiers %>% mutate(treated_binary = case_when(treatment == 'DMSO' ~ 'control',
+                                                                 TRUE ~ 'treated'))
 gdf_head <- geomorph.data.frame(GPA_head, treatment = classifiers$treatment, Pdist = Pdist)
 
 ggplot_df <- as.data.frame(cbind(as.character(gdf_head$Csize), 
@@ -504,8 +506,38 @@ if (file.exists("./output/HEAD_allometry_treatment.txt")) {
 cat("Allometry * treatment (coords ~ Csize * treatment)", capture.output(summary(allometry_treatment)), 
     file="./output/HEAD_allometry_treatment.txt", sep="\n", append=TRUE)
 
+# allometry binary control v treated
+gdf_head_binary <- geomorph.data.frame(GPA_head, treatment = classifiers$treated_binary, Pdist = Pdist)
+allometry_treated <- procD.lm(coords ~ Csize, data = gdf_head_binary, iter = 999, RRPP = TRUE)
 
-#### 2.5 Mean shape ANOVA and plots ####
+ggplot_df_binary <- as.data.frame(cbind(as.character(gdf_head_binary$Csize), 
+                                 as.character(gdf_head_binary$treatment), 
+                                 as.character(gdf_head_binary$Pdist)))
+colnames(ggplot_df_binary) <- c("Csize", "treatment", "Pdist")
+ggplot_df_binary$Csize <- as.numeric(as.character(ggplot_df$Csize))
+ggplot_df_binary$Pdist <- as.numeric(as.character(ggplot_df$Pdist))
+
+pdf("./figs/Csize_boxplot_HEAD_controlvtreated.pdf", width = 6.5, height = 6.5)
+ggplot(ggplot_df_binary, aes(x=treatment, y=log(Csize), fill=treatment)) + 
+  geom_boxplot(alpha = 0.7, outlier.shape=NA) +
+  geom_jitter(width = 0.1, size = 1.25) +
+  theme(plot.title = element_text(size = 20, face = "bold"), axis.text.x = element_text(size = 15),
+        axis.title = element_text(size = 18, face = "bold"), legend.text=element_text(size=12), 
+        legend.title=element_text(size=15, face = "bold"))
+dev.off()
+
+
+
+#### 2.5. CVA ####
+# perform CVA
+# need Morpho package for the cva
+cva_head <- CVA(GPA_head$coords, classifiers$treatment)
+
+plot(cva_head$CVscores[,1:2], bg=classifiers$treatment, pch=21, typ="p",asp=1)
+  text(cva_head$CVscores, as.character(classifiers$treatment), col=as.numeric(classifiers$treatment), cex=.7)
+plot(cva_head$CVscores[,c(3,4)], bg=classifiers$treatment, pch=21, typ="p",asp=1)
+
+#### 2.6 Mean shape and CV shape ANOVA and plots ####
 # ANOVA of mean shape - this pvalue is in manuscript
 treatment <- procD.lm(coords ~ treatment, data = gdf_head, RRPP = TRUE)
 summary(treatment)
@@ -534,7 +566,7 @@ cat("ANOVA Csize - treatment (Csize ~ treatment)", capture.output(summary(one_wa
     file="./output/ANOVA_HEAD_Csize_treatment.txt", sep="\n", append=TRUE)
 
 
-#### 2.5.1 Mean shape heatmaps ####
+#### 2.6.1 Mean shape heatmaps ####
 # load mesh of the specimen closest to the mean shape
 setwd('./lm_data/Meshes/')
 face_mesh <- get_dec_mesh('face')
@@ -561,6 +593,29 @@ U73_mesh <- tps3d(face_mesh, as.matrix(atlas_head_lm), U73_mean_shape, threads =
 U0_mesh <- tps3d(face_mesh, as.matrix(atlas_head_lm), U0_mean_shape, threads = 1)
 LY_mesh <- tps3d(face_mesh, as.matrix(atlas_head_lm), LY_mean_shape, threads = 1)
 
+# create CVA mesh
+# cvvis 1-4 is the cv number (like PC num)
+# groupmean is the mean shape for that group in all cvs (very similar to mean shape above)
+ctrl_mean_shape_CV1 <- 18*matrix(cva_head$CVvis[,1], nrow(cva_head$groupmeans), 3) + cva_head$Grandm
+ctrl_mean_shape_CV1 <- matrix(cva_head$CVvis[,1], nrow(cva_head$groupmeans), 3) + cva_head$groupmeans[,,1]
+ctrl_mesh_CV1 <- tps3d(face_mesh, as.matrix(atlas_head_lm), ctrl_mean_shape_CV1, threads = 1)
+
+triple_mean_shape_CV1 <- -8*matrix(cva_head$CVvis[,1], nrow(cva_head$groupmeans), 3) + cva_head$Grandm
+triple_mean_shape_CV1 <- matrix(cva_head$CVvis[,1], nrow(cva_head$groupmeans), 3) + cva_head$groupmeans[,,5]
+triple_mesh_CV1 <- tps3d(face_mesh, as.matrix(atlas_head_lm), triple_mean_shape_CV1, threads = 1)
+
+ctrl_mean_shape_CV2 <- 2*matrix(cva_head$CVvis[,2], nrow(cva_head$groupmeans), 3) + cva_head$Grandm
+ctrl_mean_shape_CV2 <- matrix(cva_head$CVvis[,2], nrow(cva_head$groupmeans), 3) + cva_head$groupmeans[,,1]
+ctrl_mesh_CV2 <- tps3d(face_mesh, as.matrix(atlas_head_lm), ctrl_mean_shape_CV2, threads = 1)
+
+triple_mean_shape_CV2<- 10*matrix(cva_head$CVvis[,2], nrow(cva_head$groupmeans), 3) + cva_head$Grandm
+triple_mean_shape_CV2 <- matrix(cva_head$CVvis[,2], nrow(cva_head$groupmeans), 3) + cva_head$groupmeans[,,5]
+triple_mesh_CV2 <- tps3d(face_mesh, as.matrix(atlas_head_lm), triple_mean_shape_CV2, threads = 1)
+
+indinh_mean_shape_CV2<- -5*matrix(cva_head$CVvis[,2], nrow(cva_head$groupmeans), 3) + cva_head$Grandm
+indinh_mean_shape_CV2 <- matrix(cva_head$CVvis[,2], nrow(cva_head$groupmeans), 3) + cva_head$groupmeans[,,2]
+indinh_mesh_CV2 <- tps3d(face_mesh, as.matrix(atlas_head_lm), indinh_mean_shape_CV2, threads = 1)
+
 
 # plot heatmap and setup a new reference view
 open3d(zoom = 0.75, userMatrix = frontal, windowRect = c(0, 0, 1000, 700)) 
@@ -570,6 +625,12 @@ meshDist(ctrl_mesh, LY_mesh, from=-.01, to=0.015, rampcolors = c("blue", "white"
 meshDist(ctrl_mesh, U73_mesh, from=-.01, to=0.015, rampcolors = c("blue", "white", "red"), sign = TRUE)
 meshDist(triple_mesh, U73_mesh, from=-.01, to=0.015, rampcolors = c("blue", "white", "red"), sign = TRUE)
 
+meshDist(ctrl_mesh_CV1, triple_mesh_CV1,  from=-.015, to=0.02, rampcolors = c("blue", "white", "red"), sign = TRUE)
+shade3d(triple_mesh_CV1, color="gray", alpha=1, specular='black')
+meshDist(ctrl_mesh_CV2, triple_mesh_CV2, from=-.015, to=0.02, rampcolors = c("blue", "white", "red"), sign = TRUE)
+meshDist(ctrl_mesh_CV2, indinh_mesh_CV2, from=-.015, to=0.02,rampcolors = c("blue", "white", "red"), sign = TRUE)
+
+close3d()
 
 # get warp for certain PC values rather than mean shapes
 PC = PCA_head$x[,1] # get pc1
@@ -655,7 +716,7 @@ image_browse(stack_img)
 image_write(stack_img, path = paste0("./figs/ctrl_triple_morphs_heatmaps.png"), format = "png")
 
 
-#### 2.5.2 Heatmaps - PC1-10 ####
+#### 2.6.2 Heatmaps - PC1-10 ####
 # load mesh of the specimen closest to the mean shape
 setwd('./lm_data/Meshes/')
 face_mesh <- get_dec_mesh('face')
