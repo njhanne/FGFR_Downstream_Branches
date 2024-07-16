@@ -98,8 +98,19 @@ row.names(classifiers_unord) <- classifiers_unord$id
 
 # Landmark array & GPA
 setwd("../..")
+
 head_array <- readRDS("./lm_data/Head_LM_array_FGF_embryos.rds")
 GPA_geomorph <- readRDS("./lm_data/GPA_FGF_embryos.rds") #'gpa_head' from gmm_analysis.R
+og_lm <- head_array[,, which(dimnames(head_array)[[3]] == "chick_ctr_23")]
+atlas_head_lm <- head_array[,, which(dimnames(head_array)[[3]] == "chick_ctr_23")]
+
+# remove PC1 from gpa and redo PLS
+PCA_head <- gm.prcomp(GPA_geomorph$coords)
+PC1_regression <- procD.lm(GPA_geomorph$coords~PCA_head$x[,1])
+new_shapes <- colMeans(two.d.array(GPA_geomorph$coords)) + t(PC1_regression$residuals)
+head_array <- arrayspecs(t(new_shapes), 51,3)
+GPA_geomorph$coords <- head_array
+# end PC1 code
 
 classifiers <- classifiers_unord[match(dimnames(head_array)[[3]], row.names(classifiers_unord)),]
 
@@ -120,8 +131,6 @@ pairedLM <- cbind(side.1, side.2)
 setwd('./lm_data/Meshes/')
 head_lowres <- head_mesh_spec1_dec <- get_dec_mesh('face')
 setwd("../../")
-
-atlas_head_lm <- head_array[,, which(dimnames(head_array)[[3]] == "chick_ctr_23")]
 
 # plot landmarks 
 open3d(zoom = 0.75, windowRect = c(0, 0, 700, 700)) 
@@ -149,7 +158,7 @@ PCA_SYM_FGF <- gm.prcomp(SYM_FGF$symm.shape)
 
 pal <- get_palette()
 
-pdf("./figs/PCA_symmetric_component.pdf", width = 7.5, height = 6)
+pdf("./figs/PCA_symmetric_component_noPC1.pdf", width = 7.5, height = 6)
 plot(PCA_SYM_FGF, pch = 16, col = pal[as.numeric(classifiers$treatment)], cex = 0.8)
 # text(PCA_SYM_FGF[["x"]][,1], PCA_SYM_FGF[["x"]][,2], dimnames(head_array)[[3]])
 ordiellipse(PCA_SYM_FGF, classifiers$treatment, kind="sd",conf=0.95, border = pal,
@@ -179,7 +188,7 @@ cat("ANOVA_SYM_FGF", capture.output(summary(ANOVA_ALL_sym)),
 PCA_ASYM_FGF <- gm.prcomp(SYM_FGF$asymm.shape)
 
 # this figure is used in manuscript
-pdf("./figs/PCA_asymmetric_component.pdf", width = 7.5, height = 6)
+pdf("./figs/PCA_asymmetric_component_noPC1.pdf", width = 7.5, height = 6)
 plot(PCA_ASYM_FGF, pch = 16, col = pal[as.numeric(classifiers$treatment)], cex = 0.8)
 # text(PCA_ASYM_FGF[["x"]][,1], PCA_ASYM_FGF[["x"]][,2], dimnames(head_array)[[3]], cex=0.5)
 ordiellipse(PCA_ASYM_FGF, classifiers$treatment, kind="sd",conf=0.95, border = pal,
@@ -210,6 +219,8 @@ pdf("./figs/PCA_fluctuating_asymmetry_component.pdf", width = 7.5, height = 6)
 plot(PCA_FA_FGF, pch = 16, col = pal[as.numeric(classifiers$treatment)], cex = 1.25)
 ordiellipse(PCA_FA_FGF, classifiers$treatment, kind="sd",conf=0.95, border = pal,
             draw = "polygon", alpha = 0, lty = 1)
+ordiellipse(PCA_FA_FGF, classifiers$treatment, kind="se",conf=0.95, border = pal,
+            draw = "polygon", alpha = 0, lty = 1, lwd = 4)
 legend("topright", pch = 16, col = pal, legend = levels(classifiers$treatment))
 dev.off()
 
@@ -250,39 +261,52 @@ Pdist <- ShapeDist(GPA_geomorph$coords, GPA_geomorph$consensus)
 # make the dataframe for better ggplot plotting
 gdf_head <- geomorph.data.frame(GPA_geomorph, treatment = classifiers$treatment, Pdist = Pdist)
 
+new_ctrl_coords <- gdf_head$coords[,,which(classifiers$treatment == "DMSO")]
+new_ctrl_mean_shape <- mshape(new_ctrl_coords)
+new_ctrl_mesh <- tps3d(face_mesh, as.matrix(atlas_head_lm), new_ctrl_mean_shape, threads = 1)
+
+open3d(zoom = 0.75, windowRect = c(0, 0, 700, 700)) 
+rgl::shade3d(new_ctrl_mesh, color = "gray", alpha =0.9)
+rgl::plot3d(new_ctrl_mean_shape, aspect = "iso", type = "s", size=1.2, col = "darkblue", add = T)
+rgl::text3d(x = atlas_head_lm[,1],
+            y = atlas_head_lm[,2],
+            z = atlas_head_lm[,3],
+            texts = c(1:dim(atlas_head_lm)[1]),
+            cex = 1.5, offset = 0.5, pos = 1)
+rgl::close3d()
 
 # get warp for certain PC values rather than mean shapes
 # symmetric
 sym_PC1 = PCA_SYM_FGF$x[,1] # get pc1
 sym_PC2 = PCA_SYM_FGF$x[,2] # get pc2
 
-sym_PC1_ctrl <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_geomorph$coords, x= sym_PC1, Intercept = FALSE, pred1 = .075)[[1]], threads=1)
-sym_PC1_trt <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_geomorph$coords, x= sym_PC1, Intercept = FALSE, pred1 = -.1)[[1]], threads=1)
+sym_PC1_ctrl <- tps3d(new_ctrl_mesh, as.matrix(new_ctrl_mean_shape), shape.predictor(GPA_geomorph$coords, x= sym_PC1, Intercept = FALSE, pred1 = .01)[[1]], threads=1)
+sym_PC1_trt <- tps3d(new_ctrl_mesh, as.matrix(new_ctrl_mean_shape), shape.predictor(GPA_geomorph$coords, x= sym_PC1, Intercept = FALSE, pred1 = -.02)[[1]], threads=1)
 
 
-sym_PC2_ctrl <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_geomorph$coords, x= sym_PC2, Intercept = FALSE, pred1 = -.025)[[1]], threads=1)
-sym_PC2_trt <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_geomorph$coords, x= sym_PC2, Intercept = FALSE, pred1 = .05)[[1]], threads=1)
+sym_PC2_ctrl <- tps3d(new_ctrl_mesh, as.matrix(new_ctrl_mean_shape), shape.predictor(GPA_geomorph$coords, x= sym_PC2, Intercept = FALSE, pred1 = .025)[[1]], threads=1)
+sym_PC2_trt <- tps3d(new_ctrl_mesh, as.matrix(new_ctrl_mean_shape), shape.predictor(GPA_geomorph$coords, x= sym_PC2, Intercept = FALSE, pred1 = -.025)[[1]], threads=1)
 
-open3d(zoom = 0.75, userMatrix = frontal, windowRect = c(0, 0, 1000, 700)) 
+open3d(zoom = 0.75,  windowRect = c(0, 0, 1000, 700)) 
+meshDist(sym_PC1_ctrl, sym_PC1_trt, from= -0.015, to= 0.015, rampcolors = c("blue", "white", "red"), sign = TRUE)
+meshDist(sym_PC2_ctrl, sym_PC2_trt, from= -0.015, to= 0.015, rampcolors = c("blue", "white", "red"), sign = TRUE)
+close3d()
 
-meshDist(sym_PC1_ctrl, sym_PC1_trt,  rampcolors = c("blue", "white", "red"), sign = TRUE)
-meshDist(sym_PC2_ctrl, sym_PC2_trt,  rampcolors = c("blue", "white", "red"), sign = TRUE)
 
 #asymmetry
 asym_PC1 = PCA_ASYM_FGF$x[,1] # get pc1
 asym_PC2 = PCA_ASYM_FGF$x[,2] # get pc2
 
 asym_PC1_ctrl <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_geomorph$coords, x= asym_PC1, Intercept = FALSE, pred1 = .05)[[1]], threads=1)
-asym_PC1_trt <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_geomorph$coords, x= asym_PC1, Intercept = FALSE, pred1 = -.1)[[1]], threads=1)
+asym_PC1_trt <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_geomorph$coords, x= asym_PC1, Intercept = FALSE, pred1 = -.05)[[1]], threads=1)
 
 asym_PC2_ctrl <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_geomorph$coords, x= asym_PC2, Intercept = FALSE, pred1 = .025)[[1]], threads=1)
-asym_PC2_trt <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_geomorph$coords, x= asym_PC2, Intercept = FALSE, pred1 = -.05)[[1]], threads=1)
+asym_PC2_trt <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_geomorph$coords, x= asym_PC2, Intercept = FALSE, pred1 = -.025)[[1]], threads=1)
 
-open3d(zoom = 0.75, userMatrix = frontal, windowRect = c(0, 0, 1000, 700)) 
-
-meshDist(asym_PC1_ctrl, asym_PC1_trt,  rampcolors = c("blue", "white", "red"), sign = TRUE)
-meshDist(asym_PC2_ctrl, asym_PC2_trt,  rampcolors = c("blue", "white", "red"), sign = TRUE)
-
+open3d(zoom = 0.75, windowRect = c(0, 0, 1000, 700)) 
+meshDist(asym_PC1_ctrl, asym_PC1_trt, from= -0.015, to= 0.015, rampcolors = c("blue", "white", "red"), sign = TRUE)
+meshDist(asym_PC2_ctrl, asym_PC2_trt, from= -0.015, to= 0.015, rampcolors = c("blue", "white", "red"), sign = TRUE)
+close3d()
 
 # Make heatmap for DA left vs right
 # Make table with proportion of variance explained by each component
@@ -333,26 +357,26 @@ head_lowres <- head_mesh_spec1_dec <- get_dec_mesh('head')
 setwd("../../")
 
 # load("./lm_data/RGL_head_pos.rdata")
-# open3d(zoom = 0.75, windowRect = c(0, 0, 1000, 700), userMatrix = frontal) 
-# plot3d(GPA_geomorph$coords[, , 1], col = "black", type = "s", aspect = "iso", 
-#        size = 1, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
-# plot3d(array_side1_mirrored[,,1], col = "chartreuse", type = "s", aspect = "iso", 
-#        size = 0.75, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
+open3d(zoom = 0.75, windowRect = c(0, 0, 1000, 700), userMatrix = frontal)
+plot3d(GPA_geomorph$coords[, , 1], col = "black", type = "s", aspect = "iso",
+       size = 1, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
+plot3d(array_side1_mirrored[,,1], col = "chartreuse", type = "s", aspect = "iso",
+       size = 0.75, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
 rgl::close3d()
 # 
 # # which(classifiers_mirrored$treatment == "triple")
 # 
-# open3d(zoom = 0.75, windowRect = c(0, 0, 1000, 700), userMatrix = frontal)
-# rgl::shade3d(head_lowres, color = "gray", alpha =1,specular = "black", add=T)
-# plot3d(GPA_geomorph$coords[, , 14], col = "black", type = "s", aspect = "iso",
-#        size = 1, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
-# plot3d(array_side1_mirrored[,,14], col = "chartreuse", type = "s", aspect = "iso",
-#        size = 0.75, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
-# rgl::text3d(x = atlas_head_lm[,1],
-#             y = atlas_head_lm[,2],
-#             z = atlas_head_lm[,3],
-#             texts = c(1:dim(atlas_head_lm)[1]),
-#             cex = 1.5, offset = 0.5, pos = 1)
+open3d(zoom = 0.75, windowRect = c(0, 0, 1000, 700))
+rgl::shade3d(head_lowres, color = "gray", alpha =1,specular = "black", add=T)
+plot3d(GPA_geomorph$coords[, , 14], col = "black", type = "s", aspect = "iso",
+       size = 1, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
+plot3d(array_side1_mirrored[,,14], col = "chartreuse", type = "s", aspect = "iso",
+       size = 0.75, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
+rgl::text3d(x = atlas_head_lm[,1],
+            y = atlas_head_lm[,2],
+            z = atlas_head_lm[,3],
+            texts = c(1:dim(atlas_head_lm)[1]),
+            cex = 1.5, offset = 0.5, pos = 1)
 
 # Change dimnames so we know which way they were mirrored
 dimnames(array_side1_mirrored)[[3]] <- paste0("contralateral_", dimnames(array_side1_mirrored)[[3]]) # this one has the contralateral side mirrored
@@ -376,12 +400,19 @@ classifiers_mirrored$treatment_mirror <- as.factor(classifiers_mirrored$treatmen
 
 # 4.4. Mirrored GPA & PCA ####
 surface_semis <- c(34:51)
-GPA_mirrored_double <- geomorph::gpagen(A = mirrored_array*c(GPA_geomorph$Csize,GPA_geomorph$Csize), curves = as.matrix(curveslide_all), 
+# GPA_mirrored_double <- geomorph::gpagen(A = mirrored_array*c(GPA_geomorph$Csize,GPA_geomorph$Csize), curves = as.matrix(curveslide_all), 
+#                                         surfaces = surface_semis)
+GPA_mirrored_double <- geomorph::gpagen(A = mirrored_array, curves = as.matrix(curveslide_all), 
                                         surfaces = surface_semis)
 
-GPA_mirrored_contra <- geomorph::gpagen(A = mirrored_array[,,1:dim(array_side1_mirrored)[3]]*GPA_geomorph$Csize, curves = as.matrix(curveslide_all), 
-                                      surfaces = surface_semis)
-GPA_mirrored_treat <- geomorph::gpagen(A = mirrored_array[,,(1+dim(array_side1_mirrored)[3]):dim(mirrored_array)[3]]*GPA_geomorph$Csize, curves = as.matrix(curveslide_all), 
+# GPA_mirrored_contra <- geomorph::gpagen(A = mirrored_array[,,1:dim(array_side1_mirrored)[3]]*GPA_geomorph$Csize, curves = as.matrix(curveslide_all), 
+#                                       surfaces = surface_semis)
+GPA_mirrored_contra <- geomorph::gpagen(A = mirrored_array[,,1:dim(array_side1_mirrored)[3]], curves = as.matrix(curveslide_all), 
+                                        surfaces = surface_semis)
+
+# GPA_mirrored_treat <- geomorph::gpagen(A = mirrored_array[,,(1+dim(array_side1_mirrored)[3]):dim(mirrored_array)[3]]*GPA_geomorph$Csize, curves = as.matrix(curveslide_all), 
+#                                        surfaces = surface_semis)
+GPA_mirrored_treat <- geomorph::gpagen(A = mirrored_array[,,(1+dim(array_side1_mirrored)[3]):dim(mirrored_array)[3]], curves = as.matrix(curveslide_all), 
                                        surfaces = surface_semis)
 
 saveRDS(mirrored_array, "./lm_data/mirrored_array_both_sides.rds")
@@ -404,7 +435,7 @@ cat("PCA shape variables raw - both sides mirrored", capture.output(summary(PCA_
 levels(classifiers_mirrored$treatment_mirror)
 pal_light <- get_palette(lights=TRUE)
 # this plot is in manuscript
-pdf("./figs/mirrored_PCA_treatment_sides.pdf", width = 8.25, height = 6)
+pdf("./figs/mirrored_PCA_treatment_sides_noPC1.pdf", width = 8.25, height = 6)
 plot(PCA_both_sides, pch = 16, col = pal_light[as.numeric(classifiers_mirrored$treatment_mirror)], cex = 0.6)
 ordiellipse(PCA_both_sides, classifiers_mirrored$treatment_mirror, kind="sd",conf=0.95, border = pal_light,
             draw = "polygon", alpha = 0, lty = 1)
@@ -433,16 +464,17 @@ if (file.exists("./output/PCA_contra.txt")) {
 cat("PCA shape variables raw - contralateral side mirrored", capture.output(summary(PCA_contra)), 
     file="./output/PCA_contra.txt", sep="\n", append=TRUE)
 
-pal_light_only <- pal_light[6:10]
-pdf("./figs/mirrored_PCA_contralateral_treatment.pdf", width = 8.25, height = 6)
-plot(PCA_contra, pch = 16, col = pal_light_only[as.numeric(classifiers$treatment)], cex = 2)
-ordiellipse(PCA_contra, classifiers$treatment, kind="ehull",conf=0.95, border = pal_light_only,
+pal_light_only <- pal_light[1:5]
+pdf("./figs/mirrored_PCA_contralateral_treatment_noPC1.pdf", width = 8.25, height = 6)
+plot(PCA_contra, pch = 16, col = pal_light_only[as.numeric(classifiers$treatment)], cex = .6)
+ordiellipse(PCA_contra, classifiers$treatment, kind="sd",conf=0.95, border = pal_light_only,
             draw = "polygon", alpha = 0, lty = 1)
+ordiellipse(PCA_contra, classifiers$treatment, kind="se",conf=0.95, border = pal_light_only,
+            draw = "polygon", alpha = 50, lty = 1, lwd=4)
 legend("bottomright", pch = 16, col = pal_light_only, legend = levels(classifiers$treatment))
 dev.off()
 
 t_contra <- geomorph.data.frame(GPA_mirrored_contra, treatment = classifiers$treatment)
-
 ANOVA_contra_mirrored  <- procD.lm(coords ~ treatment, data=t_contra, 
                                  iter=999, RRPP=TRUE, print.progress = FALSE)
 summary(ANOVA_contra_mirrored)
@@ -459,11 +491,13 @@ if (file.exists("./output/PCA_treat.txt")) {
 cat("PCA shape variables raw - treated side mirrored", capture.output(summary(PCA_treat)), 
     file="./output/PCA_treat.txt", sep="\n", append=TRUE)
 
-
-pdf("./figs/mirrored_PCA_treated_treatment.pdf", width = 8.25, height = 6)
-plot(PCA_treat, pch = 16, col = pal[as.numeric(classifiers$treatment)], cex = 2)
-ordiellipse(PCA_treat, classifiers$treatment, kind="ehull",conf=0.95, border = pal,
+pal_dark_only <- pal_light[6:10]
+pdf("./figs/mirrored_PCA_treated_treatment_noPC1.pdf", width = 8.25, height = 6)
+plot(PCA_treat, pch = 16, col = pal_dark_only[as.numeric(classifiers$treatment)], cex = .6)
+ordiellipse(PCA_contra, classifiers$treatment, kind="sd",conf=0.95, border = pal_dark_only,
             draw = "polygon", alpha = 0, lty = 1)
+ordiellipse(PCA_treat, classifiers$treatment, kind="se",conf=0.95, border = pal_dark_only,
+            draw = "polygon", alpha = 50, lty = 1, lwd=4)
 legend("bottomright", pch = 16, col = pal, legend = levels(classifiers$treatment))
 dev.off()
 
@@ -514,13 +548,19 @@ load("./lm_data/RGL_head_pos.rdata")
 # save(dorsal, frontal, file = "./figs/RGL_head_heatmaps_pos.rdata")
 
 # load mesh of the specimen closest to the mean shape
-head_mesh <- vcgImport("./lm_data/Meshes/ATLAS_chick_ctr_face_decimated.ply") 
+# head_mesh <- vcgImport("./lm_data/Meshes/ATLAS_chick_ctr_face_decimated.ply") 
 # The mesh should only be surface, and be just have the frontal side here
 # head_lowres <- vcgQEdecim(head_mesh, percent = 0.15)
 
+new_ctrl_mirrored_coords <- gdf_mirrored$coords[,,which(classifiers$treatment == "DMSO")]
+new_ctrl_mirrored_mean_shape <- mshape(new_ctrl_mirrored_coords)
+new_ctrl_mirrored_mesh <- tps3d(face_mesh, as.matrix(atlas_head_lm), new_ctrl_mirrored_mean_shape, threads = 1)
+
+rgl::shade3d(new_ctrl_mirrored_mesh, color="gray", alpha=1, specular="black")
+rgl::close3d()
+
 
 levels(gdf_mirrored$treatment_mirror)
-
 
 contra_DMSO_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "contra_DMSO")])
 treat_DMSO_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "treat_DMSO")])
@@ -531,43 +571,39 @@ treat_LY_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment
 # contra_triple_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "contra_triple")])
 # treat_triple_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "treat_triple")])
 
-og_lm <- head_array[,, which(dimnames(head_array)[[3]] == "chick_ctr_23")]
-atlas_head_lm <- mirrored_array[,, which(dimnames(mirrored_array)[[3]] == "treated_chick_ctr_23")] # used for figure
 model_head_lm <- GPA_mirrored_contra$coords[,, which(dimnames(GPA_mirrored_contra$coords)[[3]] == "treated_chick_ctr_23")] # used for warping mesh
-
 alt_lm <- gdf_mirrored$coords[,, which(dimnames(gdf_mirrored$coords)[[3]] == "treated_chick_ctr_23")]
+# alt_lm <- gdf_mirrored$coords[,, which(dimnames(gdf_mirrored$coords)[[3]] == "treated_treated_chick_ctr_23")]
 
 # Create morphed meshes
 # model_DMSO_mesh <- tps3d(head_mesh, as.matrix(og_lm), atlas_head_lm, threads = 1)
-model_DMSO_mesh <- tps3d(head_mesh, as.matrix(og_lm), alt_lm, threads = 1)
+# model_DMSO_mesh <- tps3d(head_mesh, as.matrix(og_lm), alt_lm, threads = 1)
 
-contra_DMSO_mesh <- tps3d(model_DMSO_mesh, as.matrix(atlas_head_lm), contra_DMSO_mean_shape, threads = 1)
-treat_DMSO_mesh <- tps3d(model_DMSO_mesh, as.matrix(atlas_head_lm), treat_DMSO_mean_shape, threads = 1)
+contra_DMSO_mesh <- tps3d(new_ctrl_mirrored_mesh, as.matrix(new_ctrl_mirrored_mean_shape), contra_DMSO_mean_shape, threads = 1)
+treat_DMSO_mesh <- tps3d(new_ctrl_mirrored_mesh, as.matrix(new_ctrl_mirrored_mean_shape), treat_DMSO_mean_shape, threads = 1)
 
-contra_LY_mesh <- tps3d(model_DMSO_mesh, as.matrix(atlas_head_lm), contra_LY_mean_shape, threads = 1)
-treat_LY_mesh <- tps3d(model_DMSO_mesh, as.matrix(atlas_head_lm), treat_LY_mean_shape, threads = 1)
-
-
+contra_LY_mesh <- tps3d(new_ctrl_mirrored_mesh, as.matrix(new_ctrl_mirrored_mean_shape), contra_LY_mean_shape, threads = 1)
+treat_LY_mesh <- tps3d(new_ctrl_mirrored_mesh, as.matrix(new_ctrl_mirrored_mean_shape), treat_LY_mean_shape, threads = 1)
 
 
 PC1 = PCA_both_sides$x[,1] # get pc1
 PC2 = PCA_both_sides$x[,2] # get pc2
 
-PC1_ctrl <- tps3d(treat_DMSO_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_mirrored_double$coords, x= PC1, Intercept = FALSE, pred1 = 0)[[1]], threads=1)
-PC1_trt <-  tps3d(treat_DMSO_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_mirrored_double$coords, x= PC1, Intercept = FALSE, pred1 = .1)[[1]], threads=1)
+PC1_ctrl <- tps3d(new_ctrl_mirrored_mesh, as.matrix(new_ctrl_mirrored_mean_shape), shape.predictor(GPA_mirrored_double$coords, x= PC1, Intercept = FALSE, pred1 = .02)[[1]], threads=1)
+PC1_trt <-  tps3d(new_ctrl_mirrored_mesh, as.matrix(new_ctrl_mirrored_mean_shape), shape.predictor(GPA_mirrored_double$coords, x= PC1, Intercept = FALSE, pred1 = -.04)[[1]], threads=1)
 
-PC2_ctrl <- tps3d(contra_DMSO_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_mirrored_double$coords, x= PC2, Intercept = FALSE, pred1 = 0)[[1]], threads=1)
-PC2_trt <-  tps3d(contra_DMSO_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_mirrored_double$coords, x= PC2, Intercept = FALSE, pred1 = .1)[[1]], threads=1)
+PC2_ctrl <- tps3d(new_ctrl_mirrored_mesh, as.matrix(new_ctrl_mirrored_mean_shape), shape.predictor(GPA_mirrored_double$coords, x= PC2, Intercept = FALSE, pred1 = -.01)[[1]], threads=1)
+PC2_trt <-  tps3d(new_ctrl_mirrored_mesh, as.matrix(new_ctrl_mirrored_mean_shape), shape.predictor(GPA_mirrored_double$coords, x= PC2, Intercept = FALSE, pred1 = .03)[[1]], threads=1)
 
 
 # Plot morphs
 open3d(zoom=0.75, windowRect = c(0,0, 1000, 700), userMatrix = frontal)
 rgl::shade3d(model_DMSO_mesh, color="gray", alpha=1, specular="black")
 # rgl::plot3d(rotonto(as.matrix(og_lm), as.matrix(model_head_lm), scale=TRUE)$yrot, col = "black", type = "s", aspect = "iso", size = 1, add = TRUE)
-rgl::plot3d(atlas_head_lm[side.1,], col = "black", type = "s", aspect = "iso", size = 1, add = TRUE)
-rgl::plot3d(atlas_head_lm[non.sym,], col = "black", type = "s", aspect = "iso", size = 1, add = TRUE)
-rgl::plot3d(atlas_head_lm[side.2,], col = "red", type = "s", aspect = "iso", size = 1, add = TRUE)
-rgl::plot3d(atlas_head_lm, col = "green", type = "s", aspect = "iso", size = 1, add = TRUE)
+rgl::plot3d(alt_lm[side.1,], col = "black", type = "s", aspect = "iso", size = 1, add = TRUE)
+rgl::plot3d(alt_lm[non.sym,], col = "black", type = "s", aspect = "iso", size = 1, add = TRUE)
+rgl::plot3d(alt_lm[side.2,], col = "red", type = "s", aspect = "iso", size = 1, add = TRUE)
+rgl::plot3d(alt_lm, col = "green", type = "s", aspect = "iso", size = 1, add = TRUE)
 axes3d(tick=T)
 
 rgl.snapshot("./figs/Morph_treated_DMSO_frontal_head.png", top = TRUE)
@@ -601,10 +637,12 @@ rgl::close3d()
 
 # HEATMAPS
 # plot the two first PC heatmaps for mean shape - these are used in manuscript
-open3d(zoom = 0.75, userMatrix = heatmap_frontal, windowRect = c(0, 0, 1000, 700)) 
+open3d(zoom = 0.75,  windowRect = c(0, 0, 1000, 700)) 
 pdf("./figs/heatmap_PC1_pt05_to_-0pt1_legend.pdf", width = 2.5, height = 6.5)
-meshDist(PC2_ctrl, PC2_trt, rampcolors = c("blue", "white", "red"), sign = TRUE) 
-meshDist(PC1_ctrl, PC1_trt, rampcolors = c("blue", "white", "red"), sign = TRUE) 
+meshDist(contra_DMSO_mesh, treat_DMSO_mesh, rampcolors = c("blue", "white", "red"), sign = TRUE) 
+meshDist(contra_LY_mesh, treat_LY_mesh, rampcolors = c("blue", "white", "red"), sign = TRUE) 
+meshDist(treat_DMSO_mesh, PC1_trt, rampcolors = c("blue", "white", "red"), sign = TRUE) 
+meshDist(contra_DMSO_mesh, PC2_trt,  rampcolors = c("blue", "white", "red"), sign = TRUE)
 rgl.snapshot("./figs/heatmap_PC1_0_to_0pt1.png", top = TRUE) # this one captures 3d output
 rgl::close3d() # this one captures the heatmap legend as pdf
 dev.off()
@@ -769,7 +807,7 @@ plot_df <- plot_df %>% rename(x = values)
 plot_df <- plot_df %>% mutate(y = ploty)
 plot_df <- plot_df %>% mutate(treatment = classifiers$treatment)
 
-pdf("./figs/integration_pls.pdf", width = 7.5, height = 6)
+pdf("./figs/integration_pls_noPC1.pdf", width = 7.5, height = 6)
 ggplot(plot_df, aes(x=x, y=y, color = treatment)) +
   geom_point(shape=16) +
   scale_fill_manual(values=get_palette(FALSE)) +
@@ -815,62 +853,3 @@ if (file.exists("./output/Integration_face_comparisons_CTRL_TRIPLE_May2023.txt")
 }
 cat("INTEGRATION on the face comparison - CTRL vs TREATMENT", capture.output(summary(PLS_comparison)), 
     file="./output/Integration_face_comparisons_CTRL_TRIPLE_May2023.txt", sep="\n", append=TRUE)
-
-
-### PLS without PC1
-# remove PC1 from gpa and redo PLS
-PCA_head <- gm.prcomp(GPA_geomorph$coords)
-PC1_regression <- procD.lm(GPA_geomorph$coords~PCA_head$x[,1])
-new_shapes <- GPA_geomorph$coords + matrix(PC1_regression$residuals, 51,3)
-
-# Integration face all
-face_integration_revised <- integration.test(new_shapes[-non.sym,,], partition.gp = side, iter = 999)
-summary(face_integration_revised) # Test summary
-p<- plot(face_integration_revised) # PLS plot
-make_ggplot(p)
-plotx <- p$plot.args$x
-ploty <- p$plot.args$y
-plot_df <- stack(plotx)
-plot_df <- plot_df %>% rename(x = values)
-plot_df <- plot_df %>% mutate(y = ploty)
-plot_df <- plot_df %>% mutate(treatment = classifiers$treatment)
-
-pdf("./figs/integration_pls_new.pdf", width = 7.5, height = 6)
-ggplot(plot_df, aes(x=x, y=y, color = treatment)) +
-  geom_point(shape=16) +
-  scale_fill_manual(values=get_palette(FALSE)) +
-  geom_smooth(method=lm, se=FALSE) +
-  geom_smooth(method=lm, se=FALSE,aes(group=1), color='black') +
-  coord_fixed()
-dev.off()
-
-# Compare integration of the face between treatment and control
-face_integration_CTRL_revised <- integration.test(new_shapes[-non.sym, , which(classifiers$treatment == "DMSO")], 
-                                          partition.gp = side, iter = 999)
-
-face_integration_Triple_revised <- integration.test(new_shapes[-non.sym, , which(classifiers$treatment == "Triple")], 
-                                            partition.gp = side, iter = 999)
-face_integration_U0_revised <- integration.test(new_shapes[-non.sym, , which(classifiers$treatment == "U0126")], 
-                                        partition.gp = side, iter = 999)
-face_integration_LY_revised <- integration.test(new_shapes[-non.sym, , which(classifiers$treatment == "LY294002")], 
-                                        partition.gp = side, iter = 999)
-face_integration_U73_revised <- integration.test(new_shapes[-non.sym, , which(classifiers$treatment == "U73122")], 
-                                         partition.gp = side, iter = 999)
-
-# these p-values are used in manuscript
-summary(face_integration_CTRL_revised) # Test summary
-summary(face_integration_Triple_revised) # Test summary
-plot(face_integration_CTRL_revised) # PLS plot
-plot(face_integration_Triple_revised)
-summary(face_integration_U0_revised) # Test summary
-summary(face_integration_LY_revised) # Test summary
-summary(face_integration_U73_revised) # Test summary
-
-PLS_comparison_Triple_revised <- compare.pls(CTRL = face_integration_CTRL_revised, TRIPLE = face_integration_Triple_revised)
-summary(PLS_comparison_Triple_revised)
-PLS_comparison_U0_revised <- compare.pls(CTRL = face_integration_CTRL_revised, U0126 = face_integration_U0_revised)
-summary(PLS_comparison_U0_revised)
-PLS_comparison_LY_revised <- compare.pls(CTRL = face_integration_CTRL_revised, LY294002 = face_integration_LY_revised)
-summary(PLS_comparison_LY_revised)
-PLS_comparison_U73_revised <- compare.pls(CTRL = face_integration_CTRL_revised, U73122 = face_integration_U73_revised)
-summary(PLS_comparison_U73_revised)

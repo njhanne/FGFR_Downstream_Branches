@@ -2,7 +2,7 @@
 # install.packages('devtools')
 # library(devtools)
 # install_github("marta-vidalgarcia/morpho.tools.GM", force = TRUE)
-# install.packages(c('rgl', 'geomorph' 'devtools', 'Morpho', 'Rvcg', 'magick', 'Evomorph', 'ggplot2', 'vegan', 'factoextra', 'gt'))
+# install.packages(c('rgl', 'geomorph' 'devtools', 'Morpho', 'Rvcg', 'magick', 'Evomorph', 'ggplot2', 'vegan', 'classifiers$treatmentextra', 'gt'))
 
 library(rgl)
 library(geomorph)
@@ -189,7 +189,7 @@ classifiers_unord <- classifiers_unord %>% mutate(treatment = case_when(treatmen
                                                                         treatment =='U73' ~ 'U73122'))
 # note, there shouldn't be any 'exp' anymore, they were all redone and moved away
 
-# make treatment a factor and set level order for graphing
+# make treatment a classifiers$treatment and set level order for graphing
 classifiers_unord$treatment <- factor(classifiers_unord$treatment, levels = c('DMSO', 'U0126', 'LY294002', 'U73122', 'Triple'))
 row.names(classifiers_unord) <- classifiers_unord$id
 
@@ -288,6 +288,7 @@ curveslide_R <- cbind(curve_R_left, curve_R_center, curve_R_right)
 
 # all our curveslide matrices
 curveslide_list <- lapply(ls(pattern = "curveslide*"), get)
+curveslide_list <- curveslide_list[c(2,3,5)]
 curveslide_all <- do.call(rbind, curveslide_list)
 curveslide_all <- as.data.frame(curveslide_all)
 colnames(curveslide_all) <- c("left", "sliding", "right")
@@ -366,8 +367,31 @@ rgl::close3d()
 
 
 #### 2.3. Mean shape PCA plots ####
-# perform PCA
+# perform PCA on full dataset
 PCA_head <- gm.prcomp(GPA_head$coords)
+
+# PCA for removing PC1
+test <- two.d.array(GPA_head$coords)
+PC1_regression <- procD.lm(test~PCA_head$x[,1])
+PC1_residuals <- PC1_regression$residuals
+new_shapes <-  t(PC1_residuals) + colMeans(test)
+new_shapes <- arrayspecs(t(new_shapes), 51,3)
+PCA_head_no_PC1 <- gm.prcomp(new_shapes)
+
+gdf_head_noPC1 <- geomorph.data.frame(new_shapes, treatment = classifiers$treatment)
+names(gdf_head_noPC1) <- c('coords', 'treatment')
+
+
+pdf("./figs/PCA_mean_shape_treatment_no_PC1.pdf", width = 8.25, height = 6)
+plot(PCA_head_no_PC1, pch = 16, col = pal[as.numeric(classifiers$treatment)], cex = .8) #, xlim=c(-.1,.15), ylim=c(-.09,.09))
+# text(PCA_head$x, PCA_head$y, dimnames(GPA_head$coords)[[3]])
+ordiellipse(PCA_head_no_PC1, classifiers$treatment, kind="se",conf=0.95, border = pal,
+            draw = "polygon", alpha = 0, lty = 1, lwd = 4)
+ordiellipse(PCA_head_no_PC1, classifiers$treatment, kind="sd",conf=0.95, border = pal,
+            draw = "polygon", alpha = .4, lty = 1, lwd = 1)
+legend("topleft", pch = 16, col = pal, legend = levels(classifiers$treatment))
+# title("PCA of shape coordinates - ctrl vs treatment")
+dev.off()
 
 
 # Save output, delete file if it exists
@@ -387,9 +411,10 @@ classifiers$treatment <- factor(classifiers$treatment, levels = c('DMSO', 'U0126
 # Plot PC1 vs PC2
 # these are used in the manuscript
 # this one generates the histograms on the margins
+plot_df <- as.data.frame(PCA_head_no_PC1$x)
 plot_df <- as.data.frame(PCA_head$x)
 
-pdf("./figs/PCA_mean_shape_treatment_histogram.pdf", width = 8.25, height = 6)
+pdf("./figs/PCA_mean_shape_treatment_histogram_noPC1.pdf", width = 8.25, height = 6)
 
 p <- ggplot(plot_df, aes(x = plot_df[,1], y =  plot_df[,2], color = classifiers$treatment)) + geom_point() + scale_color_manual(values = pal) +
    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black"))
@@ -406,6 +431,7 @@ p %>%
 # title("PCA of shape coordinates")
 dev.off()
 dev.off()
+
 
 # this figure is in the manuscript
 pdf("./figs/PCA_mean_shape_treatment.pdf", width = 8.25, height = 6)
@@ -426,7 +452,7 @@ pc_table <- plot_pc_table(PCA_head, classifiers)
 dev.off()
 
 # plot a scree plot
-PCA_comp <- PCA_head
+PCA_comp <- PCA_head_no_PC1
 class(PCA_comp) <- "princomp"
 
 pdf("./figs/PCA_head_shape_scree_plot.pdf", height = 5, width = 5)
@@ -526,16 +552,75 @@ ggplot(ggplot_df_binary, aes(x=treatment, y=log(Csize), fill=treatment)) +
         legend.title=element_text(size=15, face = "bold"))
 dev.off()
 
-
+allometry_treatment_binary <- procD.lm(coords ~ Csize * treatment, data = gdf_head_binary, iter = 999, RRPP = TRUE)
+summary(allometry_treatment_binary) # both significant, no interaction
+allometry_ph_binary <- pairwise(allometry_treatment_binary, groups = gdf_head_binary$treatment)
+summary(allometry_ph_binary)
 
 #### 2.5. CVA ####
 # perform CVA
 # need Morpho package for the cva
 cva_head <- CVA(GPA_head$coords, classifiers$treatment)
+# for the no PC1 data
+cva_head <- CVA(new_shapes, classifiers$treatment)
 
-plot(cva_head$CVscores[,1:2], bg=classifiers$treatment, pch=21, typ="p",asp=1)
-  text(cva_head$CVscores, as.character(classifiers$treatment), col=as.numeric(classifiers$treatment), cex=.7)
-plot(cva_head$CVscores[,c(3,4)], bg=classifiers$treatment, pch=21, typ="p",asp=1)
+pdf("./figs/cva_mean_shape_treatment_noPC1.pdf", width = 8.25, height = 6)
+  plot(cva_head$CVscores[,1:2], col=pal[as.numeric(classifiers$treatment)], pch=16, typ="p",asp=1)
+  # text(cva_head$CVscores, as.character(classifiers$treatment), col=as.numeric(classifiers$treatment), cex=.7)
+# plot(cva_head$CVscores[,c(3,4)], bg=classifiers$treatment, pch=21, typ="p",asp=1)
+
+
+  # https://rdrr.io/cran/Morpho/man/CVA.html
+  # add chull (merge groups)
+  # for(jj in 1:length(levels(classifiers$treatment))){
+  #       ii=levels(classifiers$treatment)[jj]
+  #   kk=chull(cva_head$CVscores[classifiers$treatment==ii,1:2])
+  #   lines(cva_head$CVscores[classifiers$treatment==ii,1][c(kk, kk[1])],
+  #   cva_head$CVscores[classifiers$treatment==ii,2][c(kk, kk[1])], col=pal[jj])
+  #   }
+
+  # add 95% ellipses
+  ordiellipse(cva_head$CVscores, classifiers$treatment, kind="se",conf=0.95, border = pal,
+            draw = "polygon", alpha = 0, lty = 1, lwd = 4)
+  ordiellipse(cva_head$CVscores, classifiers$treatment, kind="sd",conf=0.95, border = pal,
+            draw = "polygon", alpha = .4, lty = 1, lwd = 1)
+dev.off()
+  # if (require(car)) {
+  # for(ii in 1:length(levels(classifiers$treatment))){
+  #   dataEllipse(cva_head$CVscores[classifiers$treatment==levels(classifiers$treatment)[ii],1],
+  #   cva_head$CVscores[classifiers$treatment==levels(classifiers$treatment)[ii],2], 
+  #                   add=TRUE,levels=.95, col=pal[ii])}
+  #   dataEllipse(cva_head$CVscores[classifiers$treatment==levels(classifiers$treatment)[ii],1],
+  #               cva_head$CVscores[classifiers$treatment==levels(classifiers$treatment)[ii],2], 
+  #               add=TRUE,levels=.95, col=pal[ii])}
+  # }
+
+
+  # histogram per group
+  # if (require(lattice)) {
+  # histogram(~cva_head$CVscores[,1]|classifiers$treatment,
+  # layout=c(1,length(levels(classifiers$treatment))),
+  #         xlab=paste("1st canonical axis", paste(round(cva_head$Var[1,2],1),"%")))
+  # histogram(~cva_head$CVscores[,1]|classifiers$treatment, layout=c(1,length(levels(classifiers$treatment))),
+  #         xlab=paste("1st canonical axis", paste(round(cva_head$Var[2,2],1),"%")))
+  # } 
+  # plot Mahalahobis
+  # dendroS=hclust(cva_head$Dist$GroupdistMaha)
+  # dendroS$labels=levels(classifiers$treatment)
+  # par(mar=c(4,4.5,1,1))
+  # dendroS=as.dendrogram(dendroS)
+  # plot(dendroS, main='',sub='', xlab="Geographic areas",
+  #         ylab='Mahalahobis distance')
+
+ 
+   # Variance explained by the canonical roots:
+   cva_head$Var
+
+
+ggplot(data.frame(cva_head$CVscores), aes(x = CV.1)) +
+  geom_density(aes(color=classifiers$treatment)) +
+  labs(x = "CV1")
+
 
 #### 2.6 Mean shape and CV shape ANOVA and plots ####
 # ANOVA of mean shape - this pvalue is in manuscript
@@ -554,16 +639,22 @@ if (file.exists("./output/ANOVA_HEAD_shape_treatment.txt")) {
 cat("ANOVA shape - treatment (coords ~ treatment)", capture.output(summary(treatment)), 
     file="./output/ANOVA_HEAD_shape_treatment.txt", sep="\n", append=TRUE)
 
-# ANOVA of centroid size by treatment
-one_way <- aov(log(gdf_head$Csize) ~ gdf_head$treatment)
-summary(one_way) # is this the same as the allometry analysis above? double check w/ Marta
+
+# no PC1
+treatment <- procD.lm(coords ~ treatment, data = gdf_head_noPC1, RRPP = TRUE)
+summary(treatment)
+summary(treatment, test.type = "var")
+
+treatment_ph <- pairwise(treatment, groups = gdf_head_noPC1$treatment)
+summary(treatment_ph)
+summary(treatment_ph, test.type = "var", confidence = 0.95, stat.table = TRUE)
 
 # Save and delete file if it exists
-if (file.exists("./output/ANOVA_HEAD_Csize_treatment.txt")) {
-  file.remove("./output/ANOVA_HEAD_Csize_treatment.txt")
+if (file.exists("./output/ANOVA_HEAD_shape_treatment_noPC1.txt")) {
+  file.remove("./output/ANOVA_HEAD_shape_treatment_noPC1.txt")
 }
-cat("ANOVA Csize - treatment (Csize ~ treatment)", capture.output(summary(one_way)), 
-    file="./output/ANOVA_HEAD_Csize_treatment.txt", sep="\n", append=TRUE)
+cat("ANOVA shape - treatment (coords ~ treatment)", capture.output(summary(treatment)), 
+    file="./output/ANOVA_HEAD_shape_treatment_noPC1.txt", sep="\n", append=TRUE)
 
 
 #### 2.6.1 Mean shape heatmaps ####
@@ -578,6 +669,8 @@ ctrl_coords <- gdf_head$coords[,,which(gdf_head$treat == "DMSO")]
 U73_coords <- gdf_head$coords[,,which(gdf_head$treat == "U73122")]
 U0_coords <- gdf_head$coords[,,which(gdf_head$treat == "U0126")]
 LY_coords <- gdf_head$coords[,,which(gdf_head$treat == "LY294002")]
+new_ctrl_coords <- gdf_head_noPC1$coords[,,which(classifiers$treatment == "DMSO")]
+
 
 # we are going to calculate the mean shape on the shape coordinates. Everything will be in Procrustes dist.
 triple_mean_shape <- mshape(triple_coords)
@@ -585,6 +678,8 @@ ctrl_mean_shape <- mshape(ctrl_coords)
 U73_mean_shape <- mshape(U73_coords)
 U0_mean_shape <- mshape(U0_coords)
 LY_mean_shape <- mshape(LY_coords)
+new_ctrl_mean_shape <- mshape(new_ctrl_coords)
+
 
 # Create morphed meshes
 triple_mesh <- tps3d(face_mesh, as.matrix(atlas_head_lm), triple_mean_shape, threads = 1)
@@ -592,44 +687,36 @@ ctrl_mesh <- tps3d(face_mesh, as.matrix(atlas_head_lm), ctrl_mean_shape, threads
 U73_mesh <- tps3d(face_mesh, as.matrix(atlas_head_lm), U73_mean_shape, threads = 1)
 U0_mesh <- tps3d(face_mesh, as.matrix(atlas_head_lm), U0_mean_shape, threads = 1)
 LY_mesh <- tps3d(face_mesh, as.matrix(atlas_head_lm), LY_mean_shape, threads = 1)
+new_ctrl_mesh <- tps3d(face_mesh, as.matrix(atlas_head_lm), new_ctrl_mean_shape, threads = 1)
+
+open3d(zoom = 0.75, userMatrix = frontal, windowRect = c(0, 0, 1000, 700)) 
+rgl::shade3d(new_ctrl_mesh, color = "gray", alpha =1, specular = "black" )
+
 
 # create CVA mesh
 # cvvis 1-4 is the cv number (like PC num)
 # groupmean is the mean shape for that group in all cvs (very similar to mean shape above)
-ctrl_mean_shape_CV1 <- 18*matrix(cva_head$CVvis[,1], nrow(cva_head$groupmeans), 3) + cva_head$Grandm
-ctrl_mean_shape_CV1 <- matrix(cva_head$CVvis[,1], nrow(cva_head$groupmeans), 3) + cva_head$groupmeans[,,1]
+ctrl_mean_shape_CV1 <- -10*matrix(cva_head$CVvis[,1], nrow(cva_head$groupmeans), 3) + cva_head$Grandm
+# ctrl_mean_shape_CV1 <- matrix(cva_head$CVvis[,1], nrow(cva_head$groupmeans), 3) + cva_head$groupmeans[,,1]
 ctrl_mesh_CV1 <- tps3d(face_mesh, as.matrix(atlas_head_lm), ctrl_mean_shape_CV1, threads = 1)
 
-triple_mean_shape_CV1 <- -8*matrix(cva_head$CVvis[,1], nrow(cva_head$groupmeans), 3) + cva_head$Grandm
-triple_mean_shape_CV1 <- matrix(cva_head$CVvis[,1], nrow(cva_head$groupmeans), 3) + cva_head$groupmeans[,,5]
+triple_mean_shape_CV1 <- 12.5*matrix(cva_head$CVvis[,1], nrow(cva_head$groupmeans), 3) + cva_head$Grandm
+# triple_mean_shape_CV1 <- matrix(cva_head$CVvis[,1], nrow(cva_head$groupmeans), 3) + cva_head$groupmeans[,,5]
 triple_mesh_CV1 <- tps3d(face_mesh, as.matrix(atlas_head_lm), triple_mean_shape_CV1, threads = 1)
 
-ctrl_mean_shape_CV2 <- 2*matrix(cva_head$CVvis[,2], nrow(cva_head$groupmeans), 3) + cva_head$Grandm
-ctrl_mean_shape_CV2 <- matrix(cva_head$CVvis[,2], nrow(cva_head$groupmeans), 3) + cva_head$groupmeans[,,1]
+ctrl_mean_shape_CV2 <- 5*matrix(cva_head$CVvis[,2], nrow(cva_head$groupmeans), 3) + cva_head$Grandm
+# ctrl_mean_shape_CV2 <- matrix(cva_head$CVvis[,2], nrow(cva_head$groupmeans), 3) + cva_head$groupmeans[,,1]
 ctrl_mesh_CV2 <- tps3d(face_mesh, as.matrix(atlas_head_lm), ctrl_mean_shape_CV2, threads = 1)
 
-triple_mean_shape_CV2<- 10*matrix(cva_head$CVvis[,2], nrow(cva_head$groupmeans), 3) + cva_head$Grandm
-triple_mean_shape_CV2 <- matrix(cva_head$CVvis[,2], nrow(cva_head$groupmeans), 3) + cva_head$groupmeans[,,5]
+triple_mean_shape_CV2<- -9*matrix(cva_head$CVvis[,2], nrow(cva_head$groupmeans), 3) + cva_head$Grandm
+# triple_mean_shape_CV2 <- matrix(cva_head$CVvis[,2], nrow(cva_head$groupmeans), 3) + cva_head$groupmeans[,,5]
 triple_mesh_CV2 <- tps3d(face_mesh, as.matrix(atlas_head_lm), triple_mean_shape_CV2, threads = 1)
-
-indinh_mean_shape_CV2<- -5*matrix(cva_head$CVvis[,2], nrow(cva_head$groupmeans), 3) + cva_head$Grandm
-indinh_mean_shape_CV2 <- matrix(cva_head$CVvis[,2], nrow(cva_head$groupmeans), 3) + cva_head$groupmeans[,,2]
-indinh_mesh_CV2 <- tps3d(face_mesh, as.matrix(atlas_head_lm), indinh_mean_shape_CV2, threads = 1)
 
 
 # plot heatmap and setup a new reference view
-open3d(zoom = 0.75, userMatrix = frontal, windowRect = c(0, 0, 1000, 700)) 
-meshDist(ctrl_mesh, triple_mesh, from=-.01, to=0.015, rampcolors = c("blue", "white", "red"), sign = TRUE)
-meshDist(ctrl_mesh, U0_mesh, from=-.01, to=0.015, rampcolors = c("blue", "white", "red"), sign = TRUE)
-meshDist(ctrl_mesh, LY_mesh, from=-.01, to=0.015, rampcolors = c("blue", "white", "red"), sign = TRUE)
-meshDist(ctrl_mesh, U73_mesh, from=-.01, to=0.015, rampcolors = c("blue", "white", "red"), sign = TRUE)
-meshDist(triple_mesh, U73_mesh, from=-.01, to=0.015, rampcolors = c("blue", "white", "red"), sign = TRUE)
-
-meshDist(ctrl_mesh_CV1, triple_mesh_CV1,  from=-.015, to=0.02, rampcolors = c("blue", "white", "red"), sign = TRUE)
-shade3d(triple_mesh_CV1, color="gray", alpha=1, specular='black')
-meshDist(ctrl_mesh_CV2, triple_mesh_CV2, from=-.015, to=0.02, rampcolors = c("blue", "white", "red"), sign = TRUE)
-meshDist(ctrl_mesh_CV2, indinh_mesh_CV2, from=-.015, to=0.02,rampcolors = c("blue", "white", "red"), sign = TRUE)
-
+open3d(zoom = 0.75, windowRect = c(0, 0, 1000, 700)) 
+meshDist(ctrl_mesh_CV1, triple_mesh_CV1, from=-0.015, to=0.015, rampcolors = c("blue", "white", "red"), sign = TRUE)
+meshDist(ctrl_mesh_CV2, triple_mesh_CV2, from=-0.015, to=0.015, rampcolors = c("blue", "white", "red"), sign = TRUE)
 close3d()
 
 # get warp for certain PC values rather than mean shapes
@@ -639,7 +726,7 @@ PC2 = PCA_head$x[,2] # get pc2
 PC1_ctrl_extreme <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_head$coords, x= PC, Intercept = FALSE, pred1 = .1)[[1]], threads=1)
 PC1_ctrl <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_head$coords, x= PC, Intercept = FALSE, pred1 = .05)[[1]], threads=1)
 PC1_trt <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_head$coords, x= PC, Intercept = FALSE, pred1 = -.1)[[1]], threads=1)
-PC1_trt_mild <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_head$coords, x= PC, Intercept = FALSE, pred1 = -.05)[[1]], threads=1)
+PC1_trt_mild <- tps3d(face_mesh, axs.matrix(atlas_head_lm), shape.predictor(GPA_head$coords, x= PC, Intercept = FALSE, pred1 = -.05)[[1]], threads=1)
 PC1_trt_milder <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_head$coords, x= PC, Intercept = FALSE, pred1 = 0)[[1]], threads=1)
 
 PC2_ctrl <- tps3d(face_mesh, as.matrix(atlas_head_lm), shape.predictor(GPA_head$coords, x= PC2, Intercept = FALSE, pred1 = -.025)[[1]], threads=1)
@@ -659,6 +746,22 @@ meshDist(PC2_ctrl, PC2_trt, from=-0.015, to=0.03, rampcolors = c("blue", "white"
 
 open3d(zoom = 0.75, userMatrix = frontal, windowRect = c(0, 0, 1000, 700))
 meshDist(PC1_ctrl, ctrl_mesh, from= -.015, to= 0.03, rampcolors = c("blue", "white", "red"), sign = TRUE)
+
+# get warp for certain PC values rather than mean shapes
+PC = PCA_head_no_PC1$x[,1] # get pc1
+PC2 = PCA_head_no_PC1$x[,2] # get pc2
+
+PC1_ctrl <- tps3d(new_ctrl_mesh, as.matrix(new_ctrl_mean_shape), shape.predictor(new_shapes, x= PC, Intercept = FALSE, pred1 = .025)[[1]], threads=1)
+PC1_trt <- tps3d(new_ctrl_mesh, as.matrix(new_ctrl_mean_shape), shape.predictor(new_shapes, x= PC, Intercept = FALSE, pred1 = -.025)[[1]], threads=1)
+
+PC2_ctrl <- tps3d(new_ctrl_mesh, as.matrix(new_ctrl_mean_shape), shape.predictor(new_shapes, x= PC2, Intercept = FALSE, pred1 = .03)[[1]], threads=1)
+PC2_trt <- tps3d(new_ctrl_mesh, as.matrix(new_ctrl_mean_shape), shape.predictor(new_shapes, x= PC2, Intercept = FALSE, pred1 = -.03)[[1]], threads=1)
+
+open3d(zoom = 0.75,  windowRect = c(0, 0, 1000, 700))
+meshDist(PC1_ctrl, PC1_trt, from= -.01, to= 0.01, rampcolors = c("blue", "white", "red"), sign = TRUE)
+meshDist(PC2_ctrl, PC2_trt, from= -.01, to= 0.01, rampcolors = c("blue", "white", "red"), sign = TRUE)
+close3d()
+
 
 # you need to click and move mouse around in the figure until it is en-face with
 # the window, then run the line below to save the orientation
