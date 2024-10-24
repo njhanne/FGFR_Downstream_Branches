@@ -122,8 +122,8 @@ head_surface.lm <- c(34:51)
 
 # Find landmark pairs across midline
 non.sym <- c(9, 10, 13:15)
-side.1 <- c(2,4, 6, 8, 12, 16:24, 34:42)
-side.2 <- c(1, 3, 5, 7, 11, 25:33, 43:51)
+side.1 <- c(2,4, 6, 8, 12, 16:24, 34:42) # contralateral
+side.2 <- c(1, 3, 5, 7, 11, 25:33, 43:51) # treated
 
 pairedLM <- cbind(side.1, side.2)
 
@@ -152,6 +152,7 @@ summary(SYM_FGF)
 cat("SYM_FGF", capture.output(summary(SYM_FGF)), 
     file="./output/SYM_FGF.txt", sep="\n", append=TRUE)
 
+test <- gpagen(head_array)
 
 #### 3.1. Symmetric component ####
 PCA_SYM_FGF <- gm.prcomp(SYM_FGF$symm.shape)
@@ -207,6 +208,7 @@ summary(ANOVA_ASYM_FGF, test.type = "var")
 treatment_ph <- pairwise(ANOVA_ASYM_FGF, groups = classifiers$treatment)
 summary(treatment_ph)
 summary(treatment_ph, test.type = "var", confidence = 0.95, stat.table = TRUE)
+
 
 cat("ANOVA_ASYM_FGF", capture.output(summary(ANOVA_ASYM_FGF)),
     file="./output/ANOVA_asymmetric_component_FGF.txt", sep="\n", append=TRUE)
@@ -327,8 +329,8 @@ close3d()
 # Mirror landmarks on both sides and generate two new arrays
 # the non-symmetrical landmarks also remain the same
 
-array_side1_mirrored <- GPA_geomorph$coords
-array_side2_mirrored <- GPA_geomorph$coords
+array_side1_mirrored <- GPA_geomorph$coords # contralateral
+array_side2_mirrored <- GPA_geomorph$coords # treated
 
 half_array_side1 <- sweep(GPA_geomorph$coords[side.1,,1], MARGIN = 2, c(-1,1,1), `*`) 
 
@@ -339,16 +341,16 @@ plot3d(GPA_geomorph$coords[side.1, , 1], col = "green", type = "s", aspect = "is
        size = 1, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
 plot3d(half_array_side1, col = "blue", type = "s", aspect = "iso", 
        size = 1, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
-plot3d(half_array_side1, col = "red", type = "s", aspect = "iso", 
+plot3d(GPA_geomorph$coords[, , 1], col = "red", type = "s", aspect = "iso", 
        size = 1, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
 rgl::close3d()
 
 
 for (i in 1:dim(head_array)[3]){
-  array_side1_mirrored[side.2,,i] <- sweep(GPA_geomorph$coords[side.1,,1], 
+  array_side1_mirrored[side.2,,i] <- sweep(GPA_geomorph$coords[side.1,,i], 
                                            MARGIN = 2, c(-1,1,1), `*`)
   
-  array_side2_mirrored[side.1,,i] <- sweep(GPA_geomorph$coords[side.2,,1], 
+  array_side2_mirrored[side.1,,i] <- sweep(GPA_geomorph$coords[side.2,,i], 
                                            MARGIN = 2, c(-1,1,1), `*`)
 }
 
@@ -640,7 +642,7 @@ rgl::close3d()
 open3d(zoom = 0.75,  windowRect = c(0, 0, 1000, 700)) 
 pdf("./figs/heatmap_PC1_pt05_to_-0pt1_legend.pdf", width = 2.5, height = 6.5)
 meshDist(contra_DMSO_mesh, treat_DMSO_mesh, rampcolors = c("blue", "white", "red"), sign = TRUE) 
-meshDist(contra_LY_mesh, treat_LY_mesh, rampcolors = c("blue", "white", "red"), sign = TRUE) 
+meshDist(contra_DMSO_mesh, contra_LY_mesh, rampcolors = c("blue", "white", "red"), sign = TRUE) 
 meshDist(treat_DMSO_mesh, PC1_trt, rampcolors = c("blue", "white", "red"), sign = TRUE) 
 meshDist(contra_DMSO_mesh, PC2_trt,  rampcolors = c("blue", "white", "red"), sign = TRUE)
 rgl.snapshot("./figs/heatmap_PC1_0_to_0pt1.png", top = TRUE) # this one captures 3d output
