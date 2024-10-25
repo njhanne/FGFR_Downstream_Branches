@@ -152,7 +152,6 @@ summary(SYM_FGF)
 cat("SYM_FGF", capture.output(summary(SYM_FGF)), 
     file="./output/SYM_FGF.txt", sep="\n", append=TRUE)
 
-test <- gpagen(head_array)
 
 #### 3.1. Symmetric component ####
 PCA_SYM_FGF <- gm.prcomp(SYM_FGF$symm.shape)
@@ -226,7 +225,15 @@ ordiellipse(PCA_FA_FGF, classifiers$treatment, kind="se",conf=0.95, border = pal
 legend("topright", pch = 16, col = pal, legend = levels(classifiers$treatment))
 dev.off()
 
-# this is the floating asymmetry pvalue
+
+# variance covariance matrix?
+vcm <- cov(t(two.d.array(SYM_FGF$asymm.shape)))
+total_variance <- sum(diag(vcm))
+DMSO_var <- sum(diag(vcm[1:25,1:25]))
+
+U0_var <- sum(diag(vcm[78:101,78:101]))
+
+
 ANOVA_FA_FGF  <- procD.lm(SYM_FGF$FA.component ~ classifiers$treatment, 
                           iter=999, RRPP=TRUE, print.progress = FALSE)
 summary(ANOVA_FA_FGF)
@@ -244,7 +251,8 @@ cat("ANOVA_FA_FGF", capture.output(summary(ANOVA_ASYM_FGF)),
 summary(SYM_FGF)
 SYM_FGF$DA.component # array with side 1 & side 2
 
-# this doesn't work, may be by design but should ask Marta
+# this isn't a component, it is the mean direction
+# not needed for our analysis
 ANOVA_DA_FGF  <- procD.lm(SYM_FGF$DA.component ~ classifiers$treatment, 
                           iter=999, RRPP=TRUE, print.progress = FALSE)
 summary(ANOVA_DA_FGF)
@@ -332,7 +340,7 @@ close3d()
 array_side1_mirrored <- GPA_geomorph$coords # contralateral
 array_side2_mirrored <- GPA_geomorph$coords # treated
 
-half_array_side1 <- sweep(GPA_geomorph$coords[side.1,,1], MARGIN = 2, c(-1,1,1), `*`) 
+half_array_side1 <- sweep(GPA_geomorph$coords[side.1,,1], MARGIN = 2, c(-1,1,1), `*`) # mirror side 1 (right)
 
 open3d()
 plot3d(GPA_geomorph$coords[non.sym, , 1], col = "black", type = "s", aspect = "iso", 
@@ -341,16 +349,16 @@ plot3d(GPA_geomorph$coords[side.1, , 1], col = "green", type = "s", aspect = "is
        size = 1, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
 plot3d(half_array_side1, col = "blue", type = "s", aspect = "iso", 
        size = 1, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
-plot3d(GPA_geomorph$coords[, , 1], col = "red", type = "s", aspect = "iso", 
+plot3d(GPA_geomorph$coords[side.2, , 1], col = "red", type = "s", aspect = "iso",
        size = 1, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
 rgl::close3d()
 
 
 for (i in 1:dim(head_array)[3]){
-  array_side1_mirrored[side.2,,i] <- sweep(GPA_geomorph$coords[side.1,,i], 
+  array_side1_mirrored[side.2,,i] <- sweep(GPA_geomorph$coords[side.1,,i],
                                            MARGIN = 2, c(-1,1,1), `*`)
   
-  array_side2_mirrored[side.1,,i] <- sweep(GPA_geomorph$coords[side.2,,i], 
+  array_side2_mirrored[side.1,,i] <- sweep(GPA_geomorph$coords[side.2,,i],
                                            MARGIN = 2, c(-1,1,1), `*`)
 }
 
@@ -359,7 +367,7 @@ head_lowres <- head_mesh_spec1_dec <- get_dec_mesh('head')
 setwd("../../")
 
 # load("./lm_data/RGL_head_pos.rdata")
-open3d(zoom = 0.75, windowRect = c(0, 0, 1000, 700), userMatrix = frontal)
+open3d(zoom = 0.75, windowRect = c(0, 0, 1000, 700))
 plot3d(GPA_geomorph$coords[, , 1], col = "black", type = "s", aspect = "iso",
        size = 1, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
 plot3d(array_side1_mirrored[,,1], col = "chartreuse", type = "s", aspect = "iso",
@@ -369,20 +377,20 @@ rgl::close3d()
 # # which(classifiers_mirrored$treatment == "triple")
 # 
 open3d(zoom = 0.75, windowRect = c(0, 0, 1000, 700))
-rgl::shade3d(head_lowres, color = "gray", alpha =1,specular = "black", add=T)
-plot3d(GPA_geomorph$coords[, , 14], col = "black", type = "s", aspect = "iso",
-       size = 1, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
+# rgl::shade3d(head_lowres, color = "gray", alpha =1,specular = "black", add=T)
+# plot3d(GPA_geomorph$coords[, , 14], col = "black", type = "s", aspect = "iso",
+#       size = 1, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
 plot3d(array_side1_mirrored[,,14], col = "chartreuse", type = "s", aspect = "iso",
        size = 0.75, add = TRUE, xlab = "x", ylab = "y", zlab = "z")
-rgl::text3d(x = atlas_head_lm[,1],
-            y = atlas_head_lm[,2],
-            z = atlas_head_lm[,3],
-            texts = c(1:dim(atlas_head_lm)[1]),
+rgl::text3d(x = array_side1_mirrored[,1,14],
+            y = array_side1_mirrored[,2,14],
+            z = array_side1_mirrored[,3,14],
+            texts = c(1:dim(array_side1_mirrored)[1]),
             cex = 1.5, offset = 0.5, pos = 1)
 
 # Change dimnames so we know which way they were mirrored
-dimnames(array_side1_mirrored)[[3]] <- paste0("contralateral_", dimnames(array_side1_mirrored)[[3]]) # this one has the contralateral side mirrored
-dimnames(array_side2_mirrored)[[3]] <- paste0("treated_", dimnames(array_side2_mirrored)[[3]]) # this one has treated side mirrored
+dimnames(array_side2_mirrored)[[3]] <- paste0("treated_", dimnames(array_side2_mirrored)[[3]]) # this one has the treated side mirrored
+dimnames(array_side1_mirrored)[[3]] <- paste0("contralateral_", dimnames(array_side1_mirrored)[[3]]) # this one has contralateral side mirrored
 
 # And join both arrays
 
@@ -399,6 +407,10 @@ classifiers_mirrored$treatment_mirror[(1+dim(classifiers)[1]):dim(classifiers_mi
 
 classifiers_mirrored$treatment_mirror <- as.factor(classifiers_mirrored$treatment_mirror)
 
+classifiers_mirrored$treatment_mirror <- factor(classifiers_mirrored$treatment_mirror, levels = c('contra_DMSO', 'contra_U0126', 'contra_LY294002', 'contra_U73122', 'contra_Triple',
+                                                                                                  'treat_DMSO', 'treat_U0126', 'treat_LY294002', 'treat_U73122', 'treat_Triple'))
+
+
 
 # 4.4. Mirrored GPA & PCA ####
 surface_semis <- c(34:51)
@@ -409,12 +421,12 @@ GPA_mirrored_double <- geomorph::gpagen(A = mirrored_array, curves = as.matrix(c
 
 # GPA_mirrored_contra <- geomorph::gpagen(A = mirrored_array[,,1:dim(array_side1_mirrored)[3]]*GPA_geomorph$Csize, curves = as.matrix(curveslide_all), 
 #                                       surfaces = surface_semis)
-GPA_mirrored_contra <- geomorph::gpagen(A = mirrored_array[,,1:dim(array_side1_mirrored)[3]], curves = as.matrix(curveslide_all), 
+GPA_mirrored_contra <- geomorph::gpagen(A = mirrored_array[,,1:dim(array_side1_mirrored)[3]], curves = as.matrix(curveslide_all),
                                         surfaces = surface_semis)
 
 # GPA_mirrored_treat <- geomorph::gpagen(A = mirrored_array[,,(1+dim(array_side1_mirrored)[3]):dim(mirrored_array)[3]]*GPA_geomorph$Csize, curves = as.matrix(curveslide_all), 
 #                                        surfaces = surface_semis)
-GPA_mirrored_treat <- geomorph::gpagen(A = mirrored_array[,,(1+dim(array_side1_mirrored)[3]):dim(mirrored_array)[3]], curves = as.matrix(curveslide_all), 
+GPA_mirrored_treat <- geomorph::gpagen(A = mirrored_array[,,(1+dim(array_side1_mirrored)[3]):dim(mirrored_array)[3]], curves = as.matrix(curveslide_all),
                                        surfaces = surface_semis)
 
 saveRDS(mirrored_array, "./lm_data/mirrored_array_both_sides.rds")
@@ -456,6 +468,36 @@ summary(ANOVA_both_mirrored)
 ANOVA_both_mirrored_pw <- pairwise(ANOVA_both_mirrored, groups = t$treatment)
 # these are pvalues used in manuscript
 summary(ANOVA_both_mirrored_pw)
+
+
+# perform CVA
+# need Morpho package for the cva
+cva_head_mirrored <- CVA(GPA_mirrored_double$coords, classifiers_mirrored$treatment_mirror)
+
+pdf("./figs/cva_mirrored_mean_shape.pdf", width = 8.25, height = 6)
+plot(cva_head_mirrored$CVscores[,1:2], col=pal_light[as.numeric(classifiers_mirrored$treatment_mirror)], pch=16, typ="p",asp=1)
+# text(cva_head$CVscores, as.character(classifiers$treatment), col=as.numeric(classifiers$treatment), cex=.7)
+# plot(cva_head$CVscores[,c(3,4)], bg=classifiers$treatment, pch=21, typ="p",asp=1)
+
+
+# https://rdrr.io/cran/Morpho/man/CVA.html
+# add chull (merge groups)
+# for(jj in 1:length(levels(classifiers$treatment))){
+#       ii=levels(classifiers$treatment)[jj]
+#   kk=chull(cva_head$CVscores[classifiers$treatment==ii,1:2])
+#   lines(cva_head$CVscores[classifiers$treatment==ii,1][c(kk, kk[1])],
+#   cva_head$CVscores[classifiers$treatment==ii,2][c(kk, kk[1])], col=pal[jj])
+#   }
+
+# add 95% ellipses
+ordiellipse(cva_head_mirrored$CVscores, classifiers_mirrored$treatment_mirror, kind="se",conf=0.95, border = pal_light,
+            draw = "polygon", alpha = 0, lty = 1, lwd = 4)
+ordiellipse(cva_head_mirrored$CVscores, classifiers_mirrored$treatment_mirror, kind="sd",conf=0.95, border = pal_light,
+            draw = "polygon", alpha = .4, lty = 1, lwd = 1)
+dev.off()
+
+
+
 
 # 4.5. PCA contralateral side ####
 PCA_contra <- gm.prcomp(GPA_mirrored_contra$coords)
@@ -524,10 +566,10 @@ ggplot_df <- as.data.frame(cbind(as.character(gdf_mirrored$treatment_mirror),
 colnames(ggplot_df) <- c("treatment_mirror", "treatment", "Pdist")
 row.names(ggplot_df) <- dimnames(gdf_mirrored$coords)[[3]]
 ggplot_df$treatment <- as.factor(ggplot_df$treatment)
-levels(ggplot_df$treatment) <- c('DMSO', 'U0126', 'LY294002', 'U73122', 'Triple')
+# levels(ggplot_df$treatment) <- c('DMSO', 'U0126', 'LY294002', 'U73122', 'Triple')
 ggplot_df$treatment_mirror <- as.factor(ggplot_df$treatment_mirror)
-levels(ggplot_df$treatment_mirror) <- c( 'treat_DMSO', 'treat_U0126', 'treat_LY294002', 'treat_U73122', 'treat_Triple',
-                                         'contra_DMSO', 'contra_U0126',  'contra_LY294002', 'contra_U73122', 'contra_Triple')
+# levels(ggplot_df$treatment_mirror) <- c( 'treat_DMSO', 'treat_U0126', 'treat_LY294002', 'treat_U73122', 'treat_Triple',
+                                       #  'contra_DMSO', 'contra_U0126',  'contra_LY294002', 'contra_U73122', 'contra_Triple')
 ggplot_df$Pdist <- as.numeric(as.character(ggplot_df$Pdist))
 
 pdf("./figs/mirrored_Pdist_treatment.pdf", width = 6.5, height = 6.5)
@@ -570,6 +612,10 @@ treat_DMSO_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatme
 contra_LY_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "contra_LY294002")])
 treat_LY_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "treat_LY294002")])
 
+contra_Triple_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "contra_Triple")])
+treat_Triple_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "treat_Triple")])
+
+
 # contra_triple_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "contra_triple")])
 # treat_triple_mean_shape <- mshape(gdf_mirrored$coords[,,which(gdf_mirrored$treatment_mirror == "treat_triple")])
 
@@ -587,23 +633,54 @@ treat_DMSO_mesh <- tps3d(new_ctrl_mirrored_mesh, as.matrix(new_ctrl_mirrored_mea
 contra_LY_mesh <- tps3d(new_ctrl_mirrored_mesh, as.matrix(new_ctrl_mirrored_mean_shape), contra_LY_mean_shape, threads = 1)
 treat_LY_mesh <- tps3d(new_ctrl_mirrored_mesh, as.matrix(new_ctrl_mirrored_mean_shape), treat_LY_mean_shape, threads = 1)
 
+contra_Triple_mesh <- tps3d(new_ctrl_mirrored_mesh, as.matrix(new_ctrl_mirrored_mean_shape), contra_Triple_mean_shape, threads = 1)
+treat_Triple_mesh <- tps3d(new_ctrl_mirrored_mesh, as.matrix(new_ctrl_mirrored_mean_shape), treat_Triple_mean_shape, threads = 1)
 
 PC1 = PCA_both_sides$x[,1] # get pc1
 PC2 = PCA_both_sides$x[,2] # get pc2
 
-PC1_ctrl <- tps3d(new_ctrl_mirrored_mesh, as.matrix(new_ctrl_mirrored_mean_shape), shape.predictor(GPA_mirrored_double$coords, x= PC1, Intercept = FALSE, pred1 = .02)[[1]], threads=1)
-PC1_trt <-  tps3d(new_ctrl_mirrored_mesh, as.matrix(new_ctrl_mirrored_mean_shape), shape.predictor(GPA_mirrored_double$coords, x= PC1, Intercept = FALSE, pred1 = -.04)[[1]], threads=1)
+PC1_ctrl <- tps3d(new_ctrl_mirrored_mesh, as.matrix(new_ctrl_mirrored_mean_shape), shape.predictor(GPA_mirrored_double$coords, x= PC1, Intercept = FALSE, pred1 = -.03)[[1]], threads=1)
+PC1_trt <-  tps3d(new_ctrl_mirrored_mesh, as.matrix(new_ctrl_mirrored_mean_shape), shape.predictor(GPA_mirrored_double$coords, x= PC1, Intercept = FALSE, pred1 = .05)[[1]], threads=1)
 
-PC2_ctrl <- tps3d(new_ctrl_mirrored_mesh, as.matrix(new_ctrl_mirrored_mean_shape), shape.predictor(GPA_mirrored_double$coords, x= PC2, Intercept = FALSE, pred1 = -.01)[[1]], threads=1)
+PC2_ctrl <- tps3d(new_ctrl_mirrored_mesh, as.matrix(new_ctrl_mirrored_mean_shape), shape.predictor(GPA_mirrored_double$coords, x= PC2, Intercept = FALSE, pred1 = -.02)[[1]], threads=1)
 PC2_trt <-  tps3d(new_ctrl_mirrored_mesh, as.matrix(new_ctrl_mirrored_mean_shape), shape.predictor(GPA_mirrored_double$coords, x= PC2, Intercept = FALSE, pred1 = .03)[[1]], threads=1)
+
+# PC for contra only
+PC2 = PCA_contra$x[,2] # get pc2
+
+PC2_contra_ctrl <- tps3d(new_ctrl_mirrored_mesh, as.matrix(new_ctrl_mirrored_mean_shape), shape.predictor(GPA_mirrored_contra$coords, x= PC2, Intercept = FALSE, pred1 = -.015)[[1]], threads=1)
+PC2_contra_trt <-  tps3d(new_ctrl_mirrored_mesh, as.matrix(new_ctrl_mirrored_mean_shape), shape.predictor(GPA_mirrored_contra$coords, x= PC2, Intercept = FALSE, pred1 = .02)[[1]], threads=1)
+
+
+
+# create CVA mesh
+# cvvis 1-4 is the cv number (like PC num)
+# groupmean is the mean shape for that group in all cvs (very similar to mean shape above)
+ctrl_mean_shape_CV1 <- 5*matrix(cva_head_mirrored$CVvis[,1], nrow(cva_head_mirrored$groupmeans), 3) + cva_head_mirrored$Grandm
+# ctrl_mean_shape_CV1 <- matrix(cva_head$CVvis[,1], nrow(cva_head$groupmeans), 3) + cva_head$groupmeans[,,1]
+ctrl_mesh_CV1 <- tps3d(new_ctrl_mirrored_mesh, as.matrix(new_ctrl_mirrored_mean_shape), ctrl_mean_shape_CV1, threads = 1)
+
+triple_mean_shape_CV1 <- -3*matrix(cva_head_mirrored$CVvis[,1], nrow(cva_head_mirrored$groupmeans), 3) + cva_head_mirrored$Grandm
+# triple_mean_shape_CV1 <- matrix(cva_head$CVvis[,1], nrow(cva_head$groupmeans), 3) + cva_head$groupmeans[,,5]
+triple_mesh_CV1 <- tps3d(new_ctrl_mirrored_mesh, as.matrix(new_ctrl_mirrored_mean_shape), triple_mean_shape_CV1, threads = 1)
+
+trt_mean_shape_CV2 <- 4*matrix(cva_head_mirrored$CVvis[,2], nrow(cva_head_mirrored$groupmeans), 3) + cva_head_mirrored$Grandm
+# ctrl_mean_shape_CV1 <- matrix(cva_head$CVvis[,1], nrow(cva_head$groupmeans), 3) + cva_head$groupmeans[,,1]
+trt_mesh_CV2 <- tps3d(new_ctrl_mirrored_mesh, as.matrix(new_ctrl_mirrored_mean_shape), trt_mean_shape_CV2, threads = 1)
+
+contra_mean_shape_CV2 <- -2*matrix(cva_head_mirrored$CVvis[,2], nrow(cva_head_mirrored$groupmeans), 3) + cva_head_mirrored$Grandm
+# triple_mean_shape_CV1 <- matrix(cva_head$CVvis[,1], nrow(cva_head$groupmeans), 3) + cva_head$groupmeans[,,5]
+contra_mesh_CV2 <- tps3d(new_ctrl_mirrored_mesh, as.matrix(new_ctrl_mirrored_mean_shape), contra_mean_shape_CV2, threads = 1)
+
+
 
 
 # Plot morphs
 open3d(zoom=0.75, windowRect = c(0,0, 1000, 700), userMatrix = frontal)
-rgl::shade3d(model_DMSO_mesh, color="gray", alpha=1, specular="black")
+rgl::shade3d(treat_DMSO_mesh, color="gray", alpha=1, specular="black")
 # rgl::plot3d(rotonto(as.matrix(og_lm), as.matrix(model_head_lm), scale=TRUE)$yrot, col = "black", type = "s", aspect = "iso", size = 1, add = TRUE)
 rgl::plot3d(alt_lm[side.1,], col = "black", type = "s", aspect = "iso", size = 1, add = TRUE)
-rgl::plot3d(alt_lm[non.sym,], col = "black", type = "s", aspect = "iso", size = 1, add = TRUE)
+rgl::plot3d(alt_lm[non.sym,], col = "blue", type = "s", aspect = "iso", size = 1, add = TRUE)
 rgl::plot3d(alt_lm[side.2,], col = "red", type = "s", aspect = "iso", size = 1, add = TRUE)
 rgl::plot3d(alt_lm, col = "green", type = "s", aspect = "iso", size = 1, add = TRUE)
 axes3d(tick=T)
@@ -613,25 +690,26 @@ writePLY("./output/contralateral_DMSO_mesh.ply")
 rgl::close3d()
 
 open3d(zoom=0.75, windowRect = c(0,0, 1000, 700), userMatrix = frontal)
-shade3d(contra_DMSO_mesh, color="gray", alpha=1, specular='black')
+shade3d(contra_DMSO_mesh, color="gray", alpha=0.5, specular='black')
 rgl.snapshot("./figs/Morph_contralateral_DMSO_frontal_head.png", top = TRUE)
 writePLY("./output/contralateral_DMSO_mesh.ply")
 rgl::close3d()
 
 open3d(zoom=0.75, windowRect = c(0,0, 1000, 700), userMatrix = frontal)
-shade3d(treat_DMSO_mesh, color="gray", alpha=1, specular='black')
+shade3d(treat_DMSO_mesh, color="red", alpha=0.5, specular='black')
 rgl.snapshot("./figs/Morph_treated_DMSO_frontal_head.png", top = TRUE)
 writePLY("./output/treated_DMSO_mesh.ply")
 rgl.close()
 
 open3d(zoom=0.75, windowRect = c(0,0, 1000, 700), userMatrix = frontal)
-shade3d(contra_LY_mesh, color="gray", alpha=1, specular='black')
+shade3d(contra_LY_mesh, color="gray", alpha=0.5, specular='black')
 rgl.snapshot("./figs/Morph_contralateral_LY_frontal_head.png", top = TRUE)
 writePLY("./output/contralateral_triple_mesh.ply")
 rgl.close()
 
 open3d(zoom=0.75, windowRect = c(0,0, 1000, 700), userMatrix = frontal)
-shade3d(treat_LY_mesh, color="gray", alpha=1, specular='black')
+shade3d(treat_LY_mesh, color="gray", alpha=0.5, specular='black')
+rgl::plot3d(test[,,1], col = "green", type = "s", aspect = "iso", size = 1, add = TRUE)
 rgl.snapshot("./figs/Morph_treated_LY_frontal_head.png", top = TRUE)
 writePLY("./output/treated_triple_mesh.ply")
 rgl::close3d()
@@ -640,12 +718,22 @@ rgl::close3d()
 # HEATMAPS
 # plot the two first PC heatmaps for mean shape - these are used in manuscript
 open3d(zoom = 0.75,  windowRect = c(0, 0, 1000, 700)) 
-pdf("./figs/heatmap_PC1_pt05_to_-0pt1_legend.pdf", width = 2.5, height = 6.5)
-meshDist(contra_DMSO_mesh, treat_DMSO_mesh, rampcolors = c("blue", "white", "red"), sign = TRUE) 
-meshDist(contra_DMSO_mesh, contra_LY_mesh, rampcolors = c("blue", "white", "red"), sign = TRUE) 
-meshDist(treat_DMSO_mesh, PC1_trt, rampcolors = c("blue", "white", "red"), sign = TRUE) 
+pdf("./figs/heatmap_mirrored_PC1_-pt03_to_pt05_legend.pdf", width = 2.5, height = 6.5)
+meshDist(contra_DMSO_mesh, treat_DMSO_mesh, from= -.015, to= 0.015, rampcolors = c("blue", "white", "red"), sign = TRUE)
+meshDist(contra_DMSO_mesh, contra_LY_mesh, from= -.015, to= 0.015, rampcolors = c("blue", "white", "red"), sign = TRUE)
+meshDist(contra_DMSO_mesh, contra_Triple_mesh, from= -.015, to= 0.02, rampcolors = c("blue", "white", "red"), sign = TRUE)
+
+meshDist(treat_DMSO_mesh, treat_LY_mesh, from= -.015, to= 0.015, rampcolors = c("blue", "white", "red"), sign = TRUE)
+
+meshDist(ctrl_mesh_CV1, triple_mesh_CV1, rampcolors = c("blue", "white", "red"), sign = TRUE)
+meshDist(contra_mesh_CV2, trt_mesh_CV2, rampcolors = c("blue", "white", "red"), sign = TRUE)
+
+meshDist(PC1_ctrl, PC1_trt, from= -.015, to= 0.02, rampcolors = c("blue", "white", "red"), sign = TRUE)
+meshDist(PC2_contra_ctrl, PC2_contra_trt, rampcolors = c("blue", "white", "red"), sign = TRUE)
+meshDist(PC2_ctrl, PC2_trt, from= -.015, to= 0.015,  rampcolors = c("blue", "white", "red"), sign = TRUE)
+
 meshDist(contra_DMSO_mesh, PC2_trt,  rampcolors = c("blue", "white", "red"), sign = TRUE)
-rgl.snapshot("./figs/heatmap_PC1_0_to_0pt1.png", top = TRUE) # this one captures 3d output
+rgl.snapshot("./figs/heatmap_DMSO-contra_to_Triple-contra.png", top = TRUE) # this one captures 3d output
 rgl::close3d() # this one captures the heatmap legend as pdf
 dev.off()
 
@@ -789,16 +877,16 @@ image_write(imgs, path = paste0("./figs/pc_morphs/mirrored_SHAPE_heatmap_morphs_
 ?integration.test
 
 non.sym <- c(9, 10, 13:15)
-side.1 <- c(2,4, 6, 8, 12, 16:24, 34:42) # LEFT
-side.2 <- c(1, 3, 5, 7, 11, 25:33, 43:51) # RIGHT
+side.2 <- c(2,4, 6, 8, 12, 16:24, 34:42) # LEFT
+side.1 <- c(1, 3, 5, 7, 11, 25:33, 43:51) # RIGHT
 
 side <- vector(mode = "character", length = 51)
-side[side.1] <- "contralateral"
-side[side.2] <- "treated"
+side[side.2] <- "contralateral"
+side[side.1] <- "atreated" # they will go in alphabetical order, we want treated to be 'x'
 side <- side[-non.sym]
 
 # Integration face all
-face_integration <- integration.test(GPA_geomorph$coords[-non.sym,,], partition.gp = side, iter = 999)
+face_integration <- integration.test(head_array[-non.sym,,], partition.gp = side, iter = 999)
 summary(face_integration) # Test summary
 p<- plot(face_integration) # PLS plot
 make_ggplot(p)
