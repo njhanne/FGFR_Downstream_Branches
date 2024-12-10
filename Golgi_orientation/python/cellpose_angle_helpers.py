@@ -21,10 +21,10 @@ sys.path.append("./DirFileHelpers")
 from DirFileHelpers.find_all_files import find_all_filepaths
 
 # Image Processing and Geometry Helpers
-def get_all_centroids(image, dimension, img_path, centroid_paths, anis=1):
+def get_all_centroids(image, dimension, img_path, centroid_paths, rerun, anis=1):
   save_name = img_path[0].stem + '_centroids.npy'
   centroid_path = [cp for cp in centroid_paths if cp.parts[-1].endswith(save_name)]
-  if len(centroid_path) != 0:
+  if len(centroid_path) != 0 and not rerun: # don't rerun if there is an existing file, unless we manually force it
     if centroid_path[0].lstat().st_mtime > img_path[0].lstat().st_mtime:
       # if the centroid file is newer than the last time the cellpose image was generated then load it
       centroids = np.load(centroid_path[0])
@@ -45,14 +45,18 @@ def get_centroids(image, dimension, anis=1):
 
   if dimension == 2:
     # TODO add bounding box for 2D
-    centroids.append(calculate_centroid(np.where(image == i, 1, 0)))
+    print('2D centroids code needs simple re-write')
+    # centroids.append(calculate_centroid(np.where(image == i, 1, 0)))
   if dimension == 3:
+    # first get a bounding box around desired cell, this is way faster than using entire image
     t1 = time.time()
     bbox = Parallel(n_jobs=4)(delayed(bbox_3D)(image, i) for i in range(1, max))
     bbox = np.array(bbox)
     t2 = time.time()
-    print(str(max) + ' centroids in ' + str(int(t2-t1)) + ' seconds')
+    print(str(max) + ' bounding boxes in ' + str(int(t2-t1)) + ' seconds')
     print((t2-t1) / max)
+
+    # calculate the centroids
     centroids = Parallel(n_jobs=4)(delayed(calculate_3D_centroid)(bbox, image, i, anis) for i in range(0, max-1))
     centroids = np.array(centroids)
     centroids2 = np.transpose(np.array([centroids[:,0] + bbox[:,5],  centroids[:,1] + bbox[:,3],  centroids[:,2] + bbox[:,1]*anis, centroids[:,3]]))
@@ -62,8 +66,9 @@ def get_centroids(image, dimension, anis=1):
 def bbox_3D(image, i):
   # https://stackoverflow.com/a/31402351
   # this is at least 3x faster than not using a bounding box
-  img = np.where(image == i, 1, 0)
-  z = np.any(img, axis=(1, 2))
+  # look into this https://forum.image.sc/t/making-np-where-faster/58641/7
+  img = np.where(image == i, 1, 0) # binarize image to only select desired cell
+  z = np.any(img, axis=(1, 2)) # return only non-zero axes
   y = np.any(img, axis=(0, 2))
   x = np.any(img, axis=(0, 1))
 
@@ -87,7 +92,7 @@ def calculate_3D_centroid(bboxes, image, i, anis = 1):
   # pass in the mask from cellpose .tif and it will output the xyz coordinates of the centroid
   # skimage does z,y,x
   img = image[bboxes[i,1]:bboxes[i,2], bboxes[i,3]:bboxes[i,4], bboxes[i,5]:bboxes[i,6]]
-  M = measure.moments(np.where(img==i+1, 1, 0).astype('uint8'), order=3, spacing=(anis,1,1)) # moments needs uint8 for some reason...
+  M = measure.moments(np.where(img==i+1, 1, 0).astype('uint8'), order=1, spacing=(anis,1,1)) # moments needs uint8 for some reason...
   centroid_X = M[0,0,1] / M[0,0,0]
   centroid_Y = M[0,1,0] / M[0,0,0]
   centroid_Z = M[1,0,0] / M[0,0,0]
@@ -98,26 +103,30 @@ def calculate_3D_centroid(bboxes, image, i, anis = 1):
 
 def build_distance_cost_matrix(nuc_centroids, golgi_centroids, nuc_radii, smallest_nuc, matches = None):
   # make a mask same size as the list of centroids
-  nuc_centroid_cull = np.ones(len(nuc_centroids[:, 0]))
+  # nuc_centroid_cull = np.ones(len(nuc_centroids[:, 0]))
   golgi_centroid_cull = np.ones(len(golgi_centroids[:, 0]))
 
   # if there are already matches, filter them out of the mask so they aren't included in matrix
-  if matches is not None:
+  # TODO: rewrite or remove - deprecated
+  # if matches is not None:
     # matches are in image order... if there are x nuclei, the centroid index would be x-1
-    nuc_centroid_cull[matches[:,0] - 1] = 0
-    golgi_centroid_cull[matches[:, 1] - 1] = 0
+    # nuc_centroid_cull[matches[:,0] - 1] = 0
+    # golgi_centroid_cull[matches[:, 1] - 1] = 0
+
   # filter out very small nuclei (probably bad cellpose segmentation)
   if smallest_nuc is not None:
     nuc_centroid_cull_first = np.ones(len(nuc_centroids[:, 0]))
     nuc_centroid_cull_first[nuc_radii < smallest_nuc] = 0
     nuc_centroid_cull_first = np.where(nuc_centroid_cull_first)[0]
 
-
+  # filter out centroids that didn't calculate correctly
   nuc_centroid_cull_second = np.arange(0,len(nuc_centroids),1)
-  nuc_centroid_cull_second = (np.delete(nuc_centroid_cull_second, np.searchsorted(nuc_centroid_cull_second, np.unique(np.where(np.isnan(nuc_centroids))[0]))))
+  nuc_centroid_cull_second = (np.delete(nuc_centroid_cull_second, np.searchsorted(nuc_centroid_cull_second, np.unique(np.where(np.isnan(nuc_centroids))[0])))) # removes nans
+
   nuc_centroid_cull = np.intersect1d(nuc_centroid_cull_first, nuc_centroid_cull_second)
+
   golgi_centroid_cull = np.where(golgi_centroid_cull)
-  golgi_centroid_cull = (np.delete(golgi_centroid_cull[0], np.searchsorted(golgi_centroid_cull[0], np.unique(np.where(np.isnan(golgi_centroids))[0]))))
+  golgi_centroid_cull = (np.delete(golgi_centroid_cull[0], np.searchsorted(golgi_centroid_cull[0], np.unique(np.where(np.isnan(golgi_centroids))[0])))) # removes nans
 
   # calculate distance between centroids
   cost_matrix = distance.cdist(nuc_centroids[nuc_centroid_cull], golgi_centroids[golgi_centroid_cull])
@@ -279,7 +288,8 @@ golgi_centroid_dirs, golgi_centroid_paths = find_all_filepaths(golgi_directory, 
 golgi_centroid_paths = [cp for cp in golgi_centroid_paths if cp.parts[-1].endswith('_centroids.npy')]
 
 # this loads up previous results csv, with an option to rerun the analysis even if it's done, like if you've made changes or something
-rerun_pair_finding = False
+rerun_pair_finding = True
+rerun_centroid_finding = True
 results_dir, results_paths = find_all_filepaths(results_directory, '.csv')
 results_paths = [rp for rp in results_paths if rp.parts[-1].endswith('_angle_results.csv')]
 
@@ -322,16 +332,16 @@ for sample in sample_info['sample_side'].unique():
       golgi_img = tifffile.imread(golgi_img_path[0])
       anis = this_sample_info['z_space'].iloc[0]
       scaling = np.array([1, 1, anis])
-      dimensions = 3
+      dimensions = np.size(nuc_img.shape)
 
       # calculate moments on each mask and get the centroids out
       # this is extraordinarily slow, so we should save and load them if possible
       print('calculating nuclei centroids...')
-      nuc_centroids = get_all_centroids(nuc_img, 3, nuc_img_path, nuclei_centroid_paths, anis)
+      nuc_centroids = get_all_centroids(nuc_img, 3, nuc_img_path, nuclei_centroid_paths, rerun_centroid_finding, anis)
       nuc_radii = nuc_centroids[:,3]
       nuc_centroids = nuc_centroids[:,0:3]
       print('calculating Golgi centroids...')
-      golgi_centroids = get_all_centroids(golgi_img, dimensions, golgi_img_path, golgi_centroid_paths, anis)
+      golgi_centroids = get_all_centroids(golgi_img, dimensions, golgi_img_path, golgi_centroid_paths, rerun_centroid_finding, anis )
       golgi_radii = golgi_centroids[:,3]
       golgi_centroids = golgi_centroids[:,0:3]
 
@@ -389,8 +399,12 @@ for sample in sample_info['sample_side'].unique():
       # makes an array of euclidian distances between nuclei (rows) and stain (column)
       print('building cost matrix')
       first_matches = None
-      smallest_nuc = this_sample_info['smallest_nuc'].iloc[0]
+      smallest_nuc = this_sample_info['smallest_nuc'].iloc[0] # gets lower limit of nuc radius from csv
+
+      t1 = time.time()
       cost_function_matrix, nuc_centroid_cull, golgi_centroid_cull = build_distance_cost_matrix(nuc_centroids, golgi_centroids, nuc_radii, smallest_nuc, first_matches)
+      t2 = time.time()
+      print('cost matrix building time: ', t2 - t1) # basically instant
 
       # solve the linear sum assignment problem
       print('solving cost matrix')
