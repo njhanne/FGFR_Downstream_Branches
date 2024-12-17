@@ -1,5 +1,5 @@
 # Downstream branches of FGFR signaling code
-Collection of python and R scripts used to analyze data and generate figures in the manuscript. 
+Collection of python and R scripts used to analyze data and generate figures in the manuscript. A preprint is availabe here: https://doi.org/10.1101/2024.12.10.627829
 
 Each directory contains the code needed to analyze a different outcome measure. Each can be used independently from each other, they don't require one another except for the 'DirFileHelpers'.
 
