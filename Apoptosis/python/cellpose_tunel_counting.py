@@ -48,9 +48,6 @@ def freehand_roi_mask(roi):
 
 # End ImageJ ROI helpers
 
-
-
-
 ### MAIN ###
 # First find all needed directories and load them all up
 data_dir = (Path.cwd().parent.parent / 'data' / 'Apoptosis').resolve()
@@ -79,28 +76,42 @@ roi_dirs, roi_paths = find_all_filepaths(roi_directory, '.roi')
 results = []
 
 for sample in sample_info['sample_side'].unique():
+  # match the sample name to the correct images and roi file
   nuc_img_path = [mp for mp in nuclei_mask_paths if Path(mp).name.startswith(sample)]
   stain_img_path = [mp for mp in tunel_mask_paths if Path(mp).name.startswith(sample)]
   roi_path = [rp for rp in roi_paths if Path(rp).name.startswith(sample)]
+
+  # load the images and roi file
   nuc_img = cv2.imread(str(nuc_img_path[0]), -1) # https://docs.opencv.org/3.4/d8/d6a/group__imgcodecs__flags.html
   stain_img = cv2.imread(str(stain_img_path[0]), -1)
   roi = import_roi(str(roi_path[0]))
   roi = roi[roi_path[0].stem]
+
+  # create a mask from the roi drawing
+  mask = freehand_roi_mask(roi)
+
+  # img * mask multiples all the image pixel values by either 0 or 1 to delete areas outside of roi
+  # np.unique counts all the unique values of pixels, in this case cell labels
+  # size calculates the total number of unique cell labels
+  # we subtract 1 because it always detects the background as a unique value, but this isn't a cell... it's background
+  masked_nuc_count = np.unique(nuc_img * mask).size - 1
+  masked_tunel_count = np.unique(stain_img * mask).size - 1
 
   row_indices = sample_info.loc[sample_info['sample_side'] == sample]
   result = []
   result.append('; '.join([str for str in row_indices.old_filename])) # another 'wonderful' one liner
   result.append(Path(nuc_img_path[0]).name)
   result.append(row_indices.iloc[0]['sample'])
+  result.append(row_indices.iloc[0]['treatment'])
   result.append(row_indices.iloc[0]['side'])
   result.append(row_indices.iloc[0]['section'])
-  result.append(row_indices.iloc[0]['group'])
-  result.append(np.amax(nuc_img))
-  result.append(np.amax(stain_img))
+  result.append(row_indices.iloc[0]['mag'])
+  result.append(masked_nuc_count)
+  result.append(masked_tunel_count)
 
   results.append(result)
 
-results_df = pd.DataFrame(results, columns = ['old_filenames', 'new_filename', 'sample', 'side', 'section', 'group', 'nuclei_count', 'tunel_count'])
+results_df = pd.DataFrame(results, columns = ['old_filenames', 'new_filename', 'sample', 'side', 'section', 'treatment', 'nuclei_count', 'tunel_count'])
 
 ## save
 results_df.to_csv((data_dir / 'results.csv').resolve())
