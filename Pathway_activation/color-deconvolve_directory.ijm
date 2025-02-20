@@ -20,10 +20,19 @@ for (i = 0; i < lengthOf(fileList); i++) {
     desiredImage = currentImage_name + "-(Colour_2)";
 
     selectImage(desiredImage);
+
     // now we save the DAB image
     currentImage_name = substring(currentImage_name,0,lengthOf(currentImage_name)-4);
     print(currentImage_name);
-    saveAs("tiff", output_dir + currentImage_name + "_DAB_deconvolved");
+    // saveAs("tiff", output_dir + currentImage_name + "_DAB_deconvolved_");
+
+    // now we can create a filtered one for cellpose
+    run("Subtract Background...", "rolling=50 light");
+    run("Unsharp Mask...", "radius=20 mask=0.60");
+
+    // and save it
+    saveAs("tiff", output_dir + currentImage_name + "_DAB_deconvolved_filtered");
+
 	// make sure to close every images before opening the next one
 	run("Close All");
 	}

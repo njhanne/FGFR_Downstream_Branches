@@ -1,5 +1,5 @@
 library(dplyr)
-# library(tidyr)
+library(tidyr)
 library(ggplot2)
 
 # Directory
@@ -31,6 +31,12 @@ df_clean <- df_clean %>% mutate(rel_area = thresh_area / area)
 
 plot_df <- df_clean %>% group_by(AB, treatment, time, new_id) %>% summarise(rel_area = rel_area[side == "treat"] / rel_area[side == "contra"])
 plot_df_summary <- summarise(group_by(plot_df, treatment, AB, time), mean=mean(rel_area),sd=sd(rel_area))
+
+plot_df_summary <- summarise(group_by(df_clean, treatment, AB, time, side), mean=mean(rel_area),sd=sd(rel_area))
+ggplot(data = plot_df_summary %>% filter(AB == 'AKT', time=='24hr'), aes(fill = side, y=mean, x = treatment), stat='identity') +
+  geom_bar(position="dodge", stat="identity") + 
+  geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=.2,position=position_dodge(.9))
+
 
 
 p <- ggplot() + geom_bar(data = plot_df_summary %>% filter(AB == 'AKT', time=='24hr'), aes(y=mean, x = treatment), stat='identity') +
