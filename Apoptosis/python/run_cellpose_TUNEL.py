@@ -31,7 +31,7 @@ tunel_model = models.CellposeModel(gpu=cuda, model_type='cyto3')
 
 # we will use the same models trained for the pHH3, the nuclei are still nuclei shaped after all...
 # however, not all these images were captured at 40x, so we need to change the scale of the diameter
-# 10x 10, 20x 20, 40x 40
+# 10x 10, 20x 15, 40x 35
 diameters = {'10x': 10,
              '20x': 15,
              '40x': 35}

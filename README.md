@@ -14,7 +14,7 @@ TBD I need to figure out how the journal wants to host this. The file sizes are 
 
    If you are on Windows, open up anaconda from the start menu. If Macintosh or Linux then just open a terminal. Create an environment by typing:
    ```
-   conda create -n Branches python=3.8
+   conda create -n Branches python=3.10
    ```
    When it's done downloading and installing you need to 'activate' the environment by typing:
    ```
