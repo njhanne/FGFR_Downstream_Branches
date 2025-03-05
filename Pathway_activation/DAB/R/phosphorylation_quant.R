@@ -5,7 +5,7 @@ library(ggplot2)
 # Directory
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 getwd() #check our working directory
-setwd("./../../data/Branches_activation")
+setwd("../../../data/Branches_activation")
 getwd() #check our working directory
 
 # Load data
