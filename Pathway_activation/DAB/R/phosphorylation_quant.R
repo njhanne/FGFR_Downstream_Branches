@@ -9,7 +9,7 @@ setwd("../../../data/Branches_activation")
 getwd() #check our working directory
 
 # Load data
-df_activation <- read.csv('samples.csv')
+df_activation <- read.csv('samples_hand.csv')
 
 
 ### Clean and combine data

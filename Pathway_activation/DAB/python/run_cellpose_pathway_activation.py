@@ -22,7 +22,7 @@ labelimg_directory = (data_dir / 'cellpose' / 'DAB').resolve()
 
 ### IMPORTANT! ###
 # Change this to False if you did not install the cuda pytorch version when installing cellpose!
-cuda = False
+cuda = True
 
 dab_model = models.CellposeModel(gpu=cuda, pretrained_model=str(dab_model))
 
