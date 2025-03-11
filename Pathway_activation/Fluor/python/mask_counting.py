@@ -4,13 +4,14 @@ import pandas as pd
 import skimage.measure
 import skimage.io
 
-from PIL import Image, ImageDraw
-import shapely
-from read_roi import read_roi_file # pip install read-roi
-
-# import matplotlib
+import matplotlib.pyplot as plt
+# for mac
 # matplotlib.use('TkAgg')
-# import matplotlib.pyplot as plt
+
+from PIL import Image, ImageDraw
+from shapely.geometry import LineString
+from shapely.plotting import plot_line, plot_points, plot_polygon
+from read_roi import read_roi_file # pip install read-roi
 
 from pathlib import Path
 import sys
@@ -18,64 +19,58 @@ sys.path.append("./DirFileHelpers")
 from DirFileHelpers.find_all_files import find_all_filepaths
 
 
-# ImageJ ROI helpers
-def import_roi(roi_file):
-  # imports a '.roi' file, not a .zip file
-  # needs to be a string and not a path
-  roi = read_roi_file(roi_file)
-  return roi
+# ImageJ-Shapely ROI helpers
+def roi_to_shapely(roi):
+  # https://shapely.readthedocs.io/en/stable/manual.html
+  roi = list(roi.values())[0]
+  # list comp to combine the x and y dictionary into list((x1,y1) (x2,y2) etc)   - then convert to shapely line
+  roi_line = LineString([(i[0], i[1]) for i in zip(roi['x'], roi['y'])])
+  # add a buffer to one side of the line to restrict roi distance from ectoderm edge
+  # positive distance is 'left hand side' when single sided is set to True
+  # pixels / um in these images: 3.296 for lab 20x
+  # so what this will do is createe a polygon with rounded caps on both sides of my ROI line
+  # then the buffer_neg is the 'left hand side' which should be the part outside of the tissue
+  # the negative is then removed from the overall, so you are left with a polygon excluding the ectoderm, but
+  # encompassing the mesenchyme with the big rounded caps left in
+  # making the negative side bigger gets rid of some of the 'bowtie' issues
+  buffer_full = roi_line.buffer(200 * 3.296)
+  buffer_neg = roi_line.buffer(250 * 3.296, single_sided=True)
+  clean_buffer = buffer_full.difference(buffer_neg)
+
+  if clean_buffer.geom_type != 'Polygon':
+    print('roi line has bowtie')
+    # test generate the image
+    fig, ax = plt.subplots()
+    ax.imshow(img)
+    plot_polygon(clean_buffer, ax)
+    plot_line(roi_line, ax)
+    plt.show()
+
+  return clean_buffer
 
 
-def initialize_mask(image=None):
-  # Get image size
-  # all our images are 2048 square
-  # don't need to run this every time
+def shapely_to_mask(clean_buffer):
+  mask_img = Image.new('1', (2048, 2048), 0)  # makes a blank image w/ same dimensions as image
 
-  if image is not None:
-    xsize = image.sizes['y']
-    ysize = image.sizes['x']
-  else:
-    xsize = ysize = 2048
-  mask_img = Image.new('1', (xsize, ysize), 0)  # makes a blank image w/ same dimensions as image
-  return mask_img
-
-
-def roi_to_mask(roi, image=None):
-  mask_img = initialize_mask(image)
-  if roi['type'] == 'composite':
-    mask = composite_roi_mask(mask_img, roi)
-  elif roi['type'] == 'freehand':
-    mask = freehand_roi_mask(mask_img, roi)
-  return mask
-
-
-def freehand_roi_mask(mask_img, roi):
   # Get pixel values of freehand shape
-  xvals = np.rint(roi['y']).astype(int)
-  yvals = np.rint(roi['x']).astype(int)
-  freehand_coords = np.stack((xvals,yvals), axis=1).flatten()
-  freehand_coords = np.roll(freehand_coords, 1)  # not sure why it leaves these hangers-on?
-  test = ImageDraw.Draw(mask_img) # this draws the mask onto the mask_image - it automatically writes
-  test.polygon(freehand_coords.tolist(), outline=1, fill=1)  # draws freehand shape and fills with 1's
-  return np.array(mask_img)
-
-
-def composite_roi_mask(mask_img, roi):
-  # unfortunately this is kind of roughly done
-  # if I draw multiple rois in ImageJ and then combine them, they get saved as a nested list of freehand rois
-  # there's no way to know which list of values is the desired roi and which is the hole cutout (in this case the bead)
-  # to get around that I will assume all the bead rois are smaller than the overall roi, so I will rearrange them
-  # so that the desired roi gets drawn first (fill with 1s), then the hole will be drawn on top of it (fill with 0s)
-  # It should work for this, but I wouldn't count on this code being usable outside of this specific use case
-  roi['paths'].sort(key=len, reverse=True) # sorts the lists from long to short, so that big roi is (hopefully) first
-  for fh_path_num in range(len(roi['paths'])):
-    test = ImageDraw.Draw(mask_img) # this draws the mask onto the mask_image - it automatically writes
-    if fh_path_num == 0:
-      test.polygon(roi['paths'][0], outline=1, fill=1)
+  if clean_buffer.geom_type != 'Polygon':
+    print('roi line has bowtie')
+  else:
+    if clean_buffer.boundary.geom_type != 'LineString':
+      print('roi clean buffer not  clean, trying to fix')
+      clean_buffer = clean_buffer.boundary.geoms[0]
+      xvals = clean_buffer.xy[0]
+      yvals = clean_buffer.xy[1]
     else:
-      test.polygon(roi['paths'][fh_path_num], outline=1, fill=0)
-  return np.array(mask_img)
+      xvals = clean_buffer.boundary.xy[0]
+      yvals = clean_buffer.boundary.xy[1]
+    polygon_coords = np.stack((xvals,yvals), axis=1).flatten()
 
+    # draw the polygon onto the empty mask image to generate mask
+    test = ImageDraw.Draw(mask_img) # this draws the mask onto the mask_image - it automatically writes
+    test.polygon(polygon_coords.tolist(), outline=1, fill=1)  # draws freehand shape and fills with 1's
+
+  return np.array(mask_img)
 
 # End ImageJ ROI helpers
 
@@ -86,7 +81,7 @@ data_dir = (Path.cwd().parent.parent.parent / 'data' / 'Branches_activation').re
 sample_img_directory = (data_dir / 'analysis' / 'raw' / 'Fluor' / 'activation').resolve()
 sample_mask_directory = (data_dir / 'analysis' / 'cellpose' / 'Fluor' / 'expanded_mask').resolve()
 sample_roi_directory = (data_dir / 'analysis' / 'raw' / 'Fluor' / 'Nuc').resolve()
-output_dir = (data_dir / 'analysis').resolve()
+output_dir = (data_dir / 'analysis' / 'output').resolve()
 
 
 ## Get sample info
@@ -120,27 +115,42 @@ for sample in sample_info['sample_name'].unique():
     print(sample)
 
     roi = read_roi_file(str(roi_path[0]))
-    roi = list(roi.values())[0]
-    # https://shapely.readthedocs.io/en/stable/manual.html#linestrings
-    line = LineString([(i[0], i[1]) for i in zip(roi['x'], roi['y'])])
+    mask_polygon = roi_to_shapely(roi)
+    filter_mask = shapely_to_mask(mask_polygon)
 
+    label_props = skimage.measure.regionprops(cell_mask, img)
 
     # calculate the mean intensity for each cell
-    label_props = skimage.measure.regionprops(cell_mask, img)
     means = np.asarray([d['intensity_mean'] for d in label_props])
-    means = np.insert(means, 0, 0, axis=0)
-
     # calculate thresh and filter dim cells
     filter_thresh = activation_row.iloc[:,-6:].mean(axis=1).values[0] # average the 6 good/bad cells
     n_pos_cells = (means > filter_thresh).sum() # positive cells. sum() only counts True value
     n_total_cells = means.size
 
-    # optional code for viewing the results
-    # cell_LUT = np.insert(means, 0, 0, axis=0)
-    # all_cells_img = cell_LUT[cell_mask] # view the masked cells but with the mean green channel as their pixel value
-    # filtered_LUT = cell_LUT
-    # filtered_LUT[filtered_LUT < filter_thresh] = 0
-    # filtered_cells_img = filtered_LUT[cell_mask] # view the masked cells but with the mean green channel as their pixel value
+    # filter out cells outside the masked region
+
+    labels = np.asarray([d['label'] for d in label_props])
+    centroids = np.asarray([d['centroid'] for d in label_props])
+    # rounds the centroids then converts to int
+    centroids = np.round(centroids).astype(int)
+    # sees if the centroids are inside the masked area
+    masked_centroids = filter_mask[centroids[:,0],centroids[:,1]]
+    # matches the masked_centroids to their label_id
+    masked_cells = labels[masked_centroids]
+    # deletes the labels from the image that are outside the masked region
+    filtered_image = np.isin(cell_mask, masked_cells)*cell_mask
+
+    # save image of filtered cells
+    fig, ax = plt.subplots(nrows=1, ncols=1)
+    ax.imshow(filtered_image)
+    save_filename = sample + '_masked_cells.png'
+    fig.savefig(output_dir / save_filename)
+    plt.close(fig)
+
+    # calculate number of masked and filtered cells
+    masked_means = means[masked_centroids]
+    n_pos_masked_cells = (masked_means > filter_thresh).sum() # positive cells. sum() only counts True value
+    n_total_masked_cells = masked_means.size
 
     # get all the info into the results table
     result = []
@@ -149,15 +159,16 @@ for sample in sample_info['sample_name'].unique():
     result.append(activation_row.iloc[0]['pathway'])
     result.append(activation_row.iloc[0]['sample_name'])
 
-
     # cell counts
     result.append(filter_thresh)
     result.append(n_total_cells)
     result.append(n_pos_cells)
+    result.append(n_total_masked_cells)
+    result.append(n_pos_masked_cells)
 
     results.append(result)
 
-results_df = pd.DataFrame(results, columns = ['old_filename', 'treatment', 'pathway', 'sample_name', 'thresh', 'total_cells', 'pos_cells'])
+results_df = pd.DataFrame(results, columns = ['old_filename', 'treatment', 'pathway', 'sample_name', 'thresh', 'total_cells', 'pos_cells', 'total_masked_cells', 'pos_masked_cells'])
 
 ## save
 results_df.to_csv((data_dir / 'fluor_results.csv').resolve())
