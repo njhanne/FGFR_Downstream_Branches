@@ -157,6 +157,8 @@ for sample in sample_info['sample_name'].unique():
     result.append(activation_row.iloc[0]['filename'])
     result.append(activation_row.iloc[0]['treatment'])
     result.append(activation_row.iloc[0]['pathway'])
+    result.append(activation_row.iloc[0]['sample_id'])
+    result.append(activation_row.iloc[0]['section'])
     result.append(activation_row.iloc[0]['sample_name'])
 
     # cell counts
@@ -168,7 +170,7 @@ for sample in sample_info['sample_name'].unique():
 
     results.append(result)
 
-results_df = pd.DataFrame(results, columns = ['old_filename', 'treatment', 'pathway', 'sample_name', 'thresh', 'total_cells', 'pos_cells', 'total_masked_cells', 'pos_masked_cells'])
+results_df = pd.DataFrame(results, columns = ['old_filename', 'treatment', 'pathway', 'sample_id', 'section', 'sample_name', 'thresh', 'total_cells', 'pos_cells', 'total_masked_cells', 'pos_masked_cells'])
 
 ## save
 results_df.to_csv((data_dir / 'fluor_results.csv').resolve())

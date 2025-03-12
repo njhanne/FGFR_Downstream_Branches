@@ -33,8 +33,8 @@ mask_dirs, mask_paths = find_all_filepaths(sample_mask_directory, '.tif')
 
 for sample in sample_info['filename'].unique():
   # match the sample name to the correct images and roi file
-  mask_path = [mp for mp in mask_paths if Path(mp).name.startswith(sample[:-4])]
-  img_path = [sp for sp in img_paths if Path(sp).name.startswith(sample[:-4])]
+  mask_path = [mp for mp in mask_paths if Path(mp).name[:-13] == sample[:-4]]
+  img_path = [sp for sp in img_paths if Path(sp).name[:-4] == sample[:-4]]
 
   if len(mask_path) != 0:
     # load the images
