@@ -31,11 +31,13 @@ df_clean <- df_clean %>% mutate(rel_positive_masked = pos_masked_cells / total_m
 
 plot_df_summary <- summarise(group_by(df_clean, treatment, pathway), mean=mean(rel_positive_masked),sd=sd(rel_positive_masked))
 
-
-ggplot(data=df_clean, aes(fill = treatment, y=rel_positive_masked, x = pathway)) +
-  geom_bar(stat = "summary", position = "dodge", fun = mean) +
-  geom_point(position=position_jitterdodge(dodge.width=0.9)) +
-  geom_errorbar(data = plot_df_summary, aes(y=mean, x=pathway, ymin=mean-sd, ymax=mean+sd), width=.2, position=position_dodge(.9))
+pdf("./analysis/figs/masked_activated.pdf", width = 7.5, height = 6)
+p <- ggplot(data=df_clean, aes(fill = treatment, y=rel_positive_masked, x = pathway)) +
+     geom_bar(stat = "summary", position = "dodge", fun = mean) +
+     geom_point(position=position_jitterdodge(dodge.width=0.9)) +
+     geom_errorbar(data = plot_df_summary, aes(y=mean, x=pathway, ymin=mean-sd, ymax=mean+sd), width=.2, position=position_dodge(.9))
+print(p)
+dev.off()
 
 
 for (pathway_i in 1:length(levels(df_clean$pathway))) {
