@@ -17,16 +17,23 @@ df_cellpose <- read.csv('results.csv')
 # add percent to the cellpose df
 df_cellpose <- df_cellpose %>% mutate(apoptosis = tunel_count / nuclei_count * 100)
 
-df_cellpose$side <- factor(df_cellpose$side, labels = c("treated", "contralateral"))
-df_cellpose$treatment <- factor(df_cellpose$treatment, levels = c("DMSO", "U0126", "LY294002", "U73122", 'mix'))
+df_apoptosis <- df_cellpose
+df_apoptosis$side <- factor(df_apoptosis$side, labels = c("contralateral", 'treated'))
+df_apoptosis$treatment <- factor(df_apoptosis$treatment, levels = c("DMSO", "LY294002", 'mix', "U0126", "U73122"))
 
-## Compare treated-control side and groups (anova)
-# average the section results
-df_cellpose <- df_cellpose %>% group_by(treatment, side, sample) %>% summarise_at(c('nuclei_count', 'tunel_count', 'apoptosis'), mean)
+### Compare treated-control side
+# Should use Student's paired t-test since we want difference within each sample
+# First we need to average the section results or it won't work...
+df_apoptosis <- df_apoptosis %>% group_by(treatment, side, sample) %>% summarise_at(c('nuclei_count', 'tunel_count', 'apoptosis'), mean)
 
-cellpose_summarise <- summarise(group_by(df_cellpose, treatment,side), mean=mean(apoptosis),sd=sd(apoptosis))
-cellpose_summarise <- cellpose_summarise %>% unite('treatment_side', c('treatment', 'side'), remove=FALSE)
+apoptosis_summarise <- summarise(group_by(df_apoptosis, treatment,side), mean=mean(apoptosis),sd=sd(apoptosis))
+apoptosis_summarise <- apoptosis_summarise %>% unite('treatment_side', c('treatment', 'side'), remove=FALSE)
 
+pdf("./figs/cellpose_pHH3.pdf", width = 7.5, height = 6)
+p <- ggplot() + geom_bar(data = apoptosis_summarise, aes(y=mean, x = side), stat="identity") +
+  geom_jitter(data = df_apoptosis, aes(x = side, y = apoptosis), shape=16) +
+  geom_errorbar(data = apoptosis_summarise, aes(y=mean,x=side,ymin=mean-sd,ymax=mean+sd)) +
+  facet_wrap(~ treatment, nrow=1)
 
 # Plot
 pdf("./figs/cellpose_tunel.pdf", width = 7.5, height = 6)
@@ -40,20 +47,22 @@ print(p)
 dev.off()
 
 
-# Analysis
-## Paired T-test
-df_cellpose_pair <- df_cellpose %>% filter(! treatment %in% c('DMSO', 'mix'))
-df_cellpose_pair <- df_cellpose_pair %>% filter(! sample %in% c('U0_1', 'U73_9'))
-by(df_cellpose_pair, df_cellpose_pair$treatment, function(x) t.test(x$apoptosis ~ x$side, paired=TRUE, data=x))
-# these are nearly significant so I don't think we should combine the sides in the plots
-
-## ANOVA
+# ANOVA
 ### main effects only
-test <- aov(apoptosis ~ treatment, data= df_cellpose)
+test <- aov(apoptosis ~ treatment, data= df_apoptosis)
 summary(test)
 TukeyHSD(test)
 
-### treatment by side
-test <- aov(apoptosis ~ treatment*side, data= df_cellpose)
+### side
+test <- aov(apoptosis ~ treatment*side, data= df_apoptosis)
 summary(test)
 TukeyHSD(test)
+
+
+## Paired t-tests
+# Then we gotta get rid of U73_21 since it only has one side and can't be used for the t-test
+df_apoptosis_t <- df_apoptosis %>% filter(! sample %in% c('U0_1', 'U73_9'))
+
+# run the t-tests - this gives pvalues used in manuscript
+df_apoptosis_t <- df_apoptosis_t %>% filter(! treatment %in% c('DMSO', 'mix'))
+by(df_apoptosis_t, df_apoptosis_t$treatment, function(x) t.test(x$apoptosis ~ x$side, paired=TRUE, data=x))
