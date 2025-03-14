@@ -65,7 +65,6 @@ by(df_proliferation_no_DMSO, df_proliferation_no_DMSO$treatment, function(x) t.t
 
 
 
-
 ### Now that we have DMSO we don't need these comparisons anymore
 ### Looks like the U0126 don't have significant difference but the control side seems 'affected'
 # Will use Welch's t test as the sample sizes are different

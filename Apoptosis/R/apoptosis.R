@@ -29,20 +29,11 @@ df_apoptosis <- df_apoptosis %>% group_by(treatment, side, sample) %>% summarise
 apoptosis_summarise <- summarise(group_by(df_apoptosis, treatment,side), mean=mean(apoptosis),sd=sd(apoptosis))
 apoptosis_summarise <- apoptosis_summarise %>% unite('treatment_side', c('treatment', 'side'), remove=FALSE)
 
-pdf("./figs/cellpose_pHH3.pdf", width = 7.5, height = 6)
-p <- ggplot() + geom_bar(data = apoptosis_summarise, aes(y=mean, x = side), stat="identity") +
-  geom_jitter(data = df_apoptosis, aes(x = side, y = apoptosis), shape=16) +
-  geom_errorbar(data = apoptosis_summarise, aes(y=mean,x=side,ymin=mean-sd,ymax=mean+sd)) +
-  facet_wrap(~ treatment, nrow=1)
-
-# Plot
 pdf("./figs/cellpose_tunel.pdf", width = 7.5, height = 6)
-p <- ggplot(data=df_cellpose, aes(fill = side, y=apoptosis, x = treatment)) +
+p <- ggplot(data=df_apoptosis, aes(fill = side, y=apoptosis, x = treatment)) +
      geom_bar(stat = "summary", position = "dodge", fun = mean) +
      geom_point(position=position_jitterdodge(dodge.width=0.9)) +
-     geom_errorbar(data = cellpose_summarise, aes(y=mean, x=treatment, ymin=mean-sd, ymax=mean+sd), width=.2, position=position_dodge(.9))
-# file_name <- paste("cellpose_pHH3.png")
-# ggsave(filename=file_name, p, width = 15, heigh = 25, units='cm')
+     geom_errorbar(data = apoptosis_summarise, aes(y=mean, x=treatment, ymin=mean-sd, ymax=mean+sd), width=.2, position=position_dodge(.9))
 print(p)
 dev.off()
 
