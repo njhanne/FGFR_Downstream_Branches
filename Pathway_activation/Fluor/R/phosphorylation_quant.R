@@ -29,7 +29,7 @@ df_clean <- df_clean %>% mutate(rel_positive = pos_cells / total_cells)
 df_clean <- df_clean %>% mutate(rel_positive_masked = pos_masked_cells / total_masked_cells)
 
 
-plot_df_summary <- summarise(group_by(df_clean, treatment, pathway), mean=mean(rel_positive_masked),sd=sd(rel_positive_masked))
+plot_df_summary <- summarise(group_by(df_clean, treatment, pathway), mean=mean(rel_positive_masked),sd=sd(rel_positive_masked), n=n())
 
 pdf("./analysis/figs/masked_activated.pdf", width = 7.5, height = 6)
 p <- ggplot(data=df_clean, aes(fill = treatment, y=rel_positive_masked, x = pathway)) +

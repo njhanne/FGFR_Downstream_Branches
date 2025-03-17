@@ -41,8 +41,9 @@ for sample in sample_info['filename'].unique():
     img = skimage.io.imread(str(img_path[0]))
     nuc_mask = skimage.io.imread(str(mask_path[0]))
 
+    # https://bioimagebook.github.io/chapters/2-processing/6-transforms/transforms.html
     im_dist_inv = distance_transform_edt(nuc_mask == 0)
-    bw_dilated = (im_dist_inv < 15) # expand the cells by 35 pixels from nuclei
+    bw_dilated = (im_dist_inv < 15) # expand the cells by 15 pixels from nuclei
     cell_mask = watershed(im_dist_inv, nuc_mask, mask=bw_dilated, watershed_line=True) # resegment them based on cellpose nucs
 
     print('saving ' + sample)

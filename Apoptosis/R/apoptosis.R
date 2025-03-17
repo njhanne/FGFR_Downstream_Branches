@@ -26,7 +26,7 @@ df_apoptosis$treatment <- factor(df_apoptosis$treatment, levels = c("DMSO", "LY2
 # First we need to average the section results or it won't work...
 df_apoptosis <- df_apoptosis %>% group_by(treatment, side, sample) %>% summarise_at(c('nuclei_count', 'tunel_count', 'apoptosis'), mean)
 
-apoptosis_summarise <- summarise(group_by(df_apoptosis, treatment,side), mean=mean(apoptosis),sd=sd(apoptosis))
+apoptosis_summarise <- summarise(group_by(df_apoptosis, treatment,side), mean=mean(apoptosis),sd=sd(apoptosis), n=n())
 apoptosis_summarise <- apoptosis_summarise %>% unite('treatment_side', c('treatment', 'side'), remove=FALSE)
 
 pdf("./figs/cellpose_tunel.pdf", width = 7.5, height = 6)

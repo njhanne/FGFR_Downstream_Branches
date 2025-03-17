@@ -1,8 +1,6 @@
 library(dplyr)
 library(tidyr)
 library(ggplot2)
-library(lme4)
-library(nlme)
 
 # Directory
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
@@ -26,9 +24,10 @@ df_proliferation$treatment <- factor(df_proliferation$treatment, levels = c("DMS
 # Should use Student's paired t-test since we want difference within each sample
 # First we need to average the section results or it won't work...
 df_proliferation <- df_proliferation %>% group_by(treatment, side, sample) %>% summarise_at(c('nuclei_count', 'phh3_count', 'proliferation'), mean)
+# we gotta get rid of U73_21 since it only has one side and can't be used for the t-test
+df_proliferation <- df_proliferation %>% filter(sample != 'U73_21')
 
-
-cellpose_summarise <- summarise(group_by(df_proliferation, treatment,side), mean=mean(proliferation),sd=sd(proliferation))
+cellpose_summarise <- summarise(group_by(df_proliferation, treatment,side), mean=mean(proliferation),sd=sd(proliferation), n=n())
 cellpose_summarise <- cellpose_summarise %>% unite('treatment_side', c('treatment', 'side'), remove=FALSE)
 
 pdf("./figs/cellpose_pHH3.pdf", width = 7.5, height = 6)
@@ -44,23 +43,20 @@ dev.off()
 
 # Stats
 ## ANOVA
-### main effects only # these are pvalues from manuscript #
+### main effects only   # these are pvalues from manuscript #
 test <- aov(proliferation ~ treatment, data= df_proliferation)
 summary(test)
 TukeyHSD(test)
 
-### side
+### side # not used in results #
 test <- aov(proliferation ~ treatment*side, data= df_proliferation)
 summary(test)
 TukeyHSD(test)
 
 
 ## Paired t-tests
-# Then we gotta get rid of U73_21 since it only has one side and can't be used for the t-test
-df_proliferation_t <- df_proliferation %>% filter(sample != 'U73_21')
-
-# run the t-tests - this gives pvalues used in manuscript
-df_proliferation_no_DMSO <- df_proliferation_t %>% filter(treatment != 'DMSO')
+# run the t-tests  # these are pvalues from manuscript #
+df_proliferation_no_DMSO <- df_proliferation %>% filter(treatment != 'DMSO')
 by(df_proliferation_no_DMSO, df_proliferation_no_DMSO$treatment, function(x) t.test(x$proliferation ~ x$side, paired=TRUE, data=x))
 
 
