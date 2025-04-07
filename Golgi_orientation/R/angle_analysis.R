@@ -1098,7 +1098,7 @@ plot.windrose <- function(data, dirres = 10, color, control) {
   p.windrose <- ggplot(data = T_data, aes(x = dir.binned, y = z, fill = color, color = color)) +
       geom_bar(width = 1, linewidth = .5, stat='identity') +
       scale_x_discrete(drop = FALSE, labels = waiver()) +
-      scale_y_continuous(limits = c(0, 0.1), expand = c(0, 0)) + #,  breaks = c(0,.01,.02,.03,.04)) +
+      scale_y_continuous(limits = c(0, 0.2), expand = c(0, 0)) + #,  breaks = c(0,.01,.02,.03,.04)) +
       coord_polar(start = ((270-(dirres/2))) * pi/180, direction = -1) +
       scale_fill_manual(name = "treated", values = color, drop = FALSE) +
       scale_color_manual(name = "treated", values = c('black','black'), drop = FALSE) +
@@ -1564,6 +1564,10 @@ for (i in 1:length(unique(filter_data$old_filename_generic_noside.x))) {
 
 graphing_positional_df <- df_baseline_masked #%>% filter(region_name != 'center')
 
+# optional to see those outside 200um
+graphing_positional_df <- df_baseline_masked_outside
+
+
 # it's possible the angles weren't flipped, can be done here just in case
 graphing_positional_df$flipped_positional_angle <- graphing_positional_df$positional_angle
 graphing_positional_df <- graphing_positional_df  %>% mutate(flipped_positional_angle = case_when((side == 'control' & positional_angle <= pi) ~ pi-positional_angle, (side == 'control' & positional_angle > pi) ~ 3*pi - positional_angle, TRUE ~ flipped_positional_angle))
@@ -1585,28 +1589,46 @@ graphing_positional_df <- graphing_positional_df %>% mutate(side = recode(side, 
 for (i in 1:length(levels(graphing_positional_df$treatment))) {
   filter_data <- graphing_positional_df %>% filter(as.integer(treatment) == i)
   
-  # # png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_control_vsDMSO.png"), units='in', width=5, height=5, res=300)
-  # pdf(paste0("./figs/positional_windrose_", as.character(filter_data$treatment[1]), "_contralateral.pdf"), width=5, height=5)
-  # control_plot <- plot.windrose(filter_data %>% filter(side == 'contralateral'), 'white', dirres = 10)
-  # plot(control_plot)
+  # png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_control_vsDMSO.png"), units='in', width=5, height=5, res=300)
+  pdf(paste0("./figs/positional_windrose_", as.character(filter_data$treatment[1]), "_contralateral.pdf"), width=5, height=5)
+  control_plot <- plot.windrose(filter_data %>% filter(side == 'contralateral'), 'white', dirres = 10)
+  plot(control_plot)
+  dev.off()
   # dev.off()
-  # # dev.off()
-  # 
-  # # png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_treated_vsDMSO.png"), units='in', width=5, height=5, res=300)
-  # pdf(paste0("./figs/positional_windrose_", as.character(filter_data$treatment[1]), "_treated.pdf"), width=5, height=5)
-  # treated_plot <- plot.windrose(filter_data %>% filter(side == 'treated'), 'red', dirres = 10)
-  # plot(treated_plot)
+
+  # png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_treated_vsDMSO.png"), units='in', width=5, height=5, res=300)
+  pdf(paste0("./figs/positional_windrose_", as.character(filter_data$treatment[1]), "_treated.pdf"), width=5, height=5)
+  treated_plot <- plot.windrose(filter_data %>% filter(side == 'treated'), 'red', dirres = 10)
+  plot(treated_plot)
+  dev.off()
   # dev.off()
-  # # dev.off()
   
-  if (i == 1) {
-    filter_data$angle_deg <- as.numeric(filter_data$flipped_positional_angle) * (180 / pi)
-    pdf(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "combined.pdf"), width=5, height=5)
-    combined_plot <- plot.windrose(filter_data, 'white', dirres = 10)
-    plot(combined_plot)
+  # if (i == 1) {
+  #   filter_data$angle_deg <- as.numeric(filter_data$flipped_positional_angle) * (180 / pi)
+  #   pdf(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "combined.pdf"), width=5, height=5)
+  #   combined_plot <- plot.windrose(filter_data, 'white', dirres = 10)
+  #   plot(combined_plot)
+  #   dev.off()
+  # }
+}
+
+graphing_positional_df$region <- factor(graphing_positional_df$region)
+levels(graphing_positional_df$region) <- c("contra_glob", "contra_mid", "center", "treated_mid", "treated_glob")
+# for every region comparison
+for (i in 1:length(levels(graphing_positional_df$treatment))) {
+  filter_data <- graphing_positional_df %>% filter(as.integer(treatment) == i)
+  for (j in 1:length(levels(graphing_positional_df$region))) {
+    plot_filter_data <-  filter_data %>% filter(as.integer(region) == j)
+
+    # png(paste0("./figs/windrose_", as.character(filter_data$treatment[1]), "_control_vsDMSO.png"), units='in', width=5, height=5, res=300)
+    pdf(paste0("./figs/positional_windrose_outside_", as.character(plot_filter_data$treatment[1]), "_", as.character(plot_filter_data$region[1]),  ".pdf"), width=5, height=5)
+    control_plot <- plot.windrose(plot_filter_data, 'white', dirres = 10)
+    plot(control_plot)
     dev.off()
+    # dev.off()
   }
 }
+
 
 
 #### 5 Watson U2 tests ####
