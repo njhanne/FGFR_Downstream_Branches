@@ -1454,6 +1454,8 @@ for (treatment_i in 1:length(levels(df_baseline_masked$treatment))) {
 # analysis of group differences. I will get relative amount in each quadrant
 # and compare to contralateral and DMSO groups
 
+# These pvalues are used in manuscript
+
 df_baseline_masked <- df_baseline_masked  %>% mutate(treatment = factor(treatment, levels = c('DMSO', 'U0126', 'LY294002', 'U73122', '3Mix')))
 df_baseline_masked$flipped_positional_angle <- df_baseline_masked$positional_angle
 df_baseline_masked <- df_baseline_masked  %>% mutate(flipped_positional_angle = case_when((side == 'control' & positional_angle <= pi) ~ pi-positional_angle, (side == 'control' & positional_angle > pi) ~ 3*pi - positional_angle, TRUE ~ flipped_positional_angle))
@@ -1482,14 +1484,9 @@ for (region_i in 1:(length(levels(df_baseline_masked$region_name))+1)) {
       y100 = quantile(freq, 0.95),
       ysd = sd(freq))
     
-    # p <- ggplot(data=graph_mean_df, aes(treatment, y50, fill = as.factor(side))) +
-    #   geom_col(stat = "identity", position = 'dodge') +
-    #   geom_errorbar(aes(ymin=y50, ymax=y50+ysd), position = 'dodge', width = 1) +
-    #   geom_point(data=bin_summary_quad, aes(treatment, freq, fill=side), size = 1, position=position_jitterdodge(jitter.width = 0.2)) +
-    #   theme(legend.position = "none") # + ylim(0,0.6)
+
     file_name <- paste0("./figs/positional_avg_", region_name, '_', as.character(levels(group_bin_summary$quad_bin)[quadrant]), ".tiff", sep="")
-    # ggsave(filename=file_name, p, width = 25, heigh = 15, units='cm')
-    # print(p)
+
     
     
     # pdf(paste0("./figs/positional_avg", as.character(levels(group_bin_summary$quad_bin)[quadrant]), "_contralateral.pdf"), width=10, height=6)
@@ -1500,10 +1497,23 @@ for (region_i in 1:(length(levels(df_baseline_masked$region_name))+1)) {
     # print(p)
     # dev.off()
     
-    test<- aov(bin_summary_quad$freq ~  bin_summary_quad$treatment * bin_summary_quad$side)
+    test<- aov(bin_summary_quad$freq ~  bin_summary_quad$treatment)
     print(file_name)
     print(summary(test))
     print(TukeyHSD(test))
+    
+    if (region_name == 'all') {
+      ttests <- by(bin_summary_quad, bin_summary_quad$treatment, function(x) t.test(x$freq ~ x$side, paired=TRUE, data=x))
+      print(ttests)
+      
+      p <- ggplot(data=graph_mean_df, aes(treatment, y50, fill = as.factor(side))) +
+        geom_col(stat = "identity", position = 'dodge') +
+        geom_errorbar(aes(ymin=y50, ymax=y50+ysd), position = 'dodge', width = 1) +
+        geom_point(data=bin_summary_quad, aes(treatment, freq, fill=side), size = 1, position=position_jitterdodge(jitter.width = 0.2)) +
+        theme(legend.position = "none") # + ylim(0,0.6)
+      ggsave(filename=file_name, p, width = 25, heigh = 15, units='cm')
+      print(p)
+    }
   }
 }
 
