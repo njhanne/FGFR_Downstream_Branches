@@ -1388,6 +1388,7 @@ df_masked$side <- as.factor(df_masked$side)
 df_masked$region_name <- as.factor(df_masked$region_name)
 df_baseline_masked <- filter_distance_from_octile_lines(df_masked, octile_filenames, info_df, 0,200)
 
+df_baseline_masked_posterior <- filter_distance_from_octile_lines(df_masked, octile_filenames, info_df, 200,1000)
 
 #### 2.2 overview heatmap plot ####
 for (treatment_i in 1:length(levels(df_baseline_masked$treatment))) {
@@ -1460,6 +1461,9 @@ df_baseline_masked <- df_baseline_masked  %>% mutate(treatment = factor(treatmen
 df_baseline_masked$flipped_positional_angle <- df_baseline_masked$positional_angle
 df_baseline_masked <- df_baseline_masked  %>% mutate(flipped_positional_angle = case_when((side == 'control' & positional_angle <= pi) ~ pi-positional_angle, (side == 'control' & positional_angle > pi) ~ 3*pi - positional_angle, TRUE ~ flipped_positional_angle))
 df_baseline_masked <- df_baseline_masked  %>% mutate(quad_bin = cut(flipped_positional_angle, breaks = c(0, pi/2, pi, 3*pi/2, 2*pi)))
+
+avg_cells <- df_baseline_masked %>% group_by(sample_info, treatment, side) %>% summarise(n = n())
+avg_cells <- avg_cells %>% group_by(treatment, side) %>% summarise(num = n(), mean = mean(n))
 
 for (region_i in 1:(length(levels(df_baseline_masked$region_name))+1)) {
   if (region_i == length(levels(df_baseline_masked$region_name))+1) {

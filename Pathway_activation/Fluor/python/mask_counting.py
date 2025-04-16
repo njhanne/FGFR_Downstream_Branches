@@ -4,9 +4,11 @@ import pandas as pd
 import skimage.measure
 import skimage.io
 
-import matplotlib.pyplot as plt
+
 # for mac
-# matplotlib.use('TkAgg')
+import matplotlib
+matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
 
 from PIL import Image, ImageDraw
 from shapely.geometry import LineString
@@ -108,67 +110,69 @@ for sample in sample_info['sample_name'].unique():
   roi_path =[rp for rp in roi_paths if Path(rp).name.startswith(nuc_filename[:-4])]
 
   if len(mask_path) != 0:
-    # load the images
-    img = skimage.io.imread(str(img_path[0]))
-    cell_mask = skimage.io.imread(str(mask_path[0]))
+
 
     print(sample)
+    if sample == 'P-ERK_mix1_1':
+      # load the images
+      img = skimage.io.imread(str(img_path[0]))
+      cell_mask = skimage.io.imread(str(mask_path[0]))
 
-    roi = read_roi_file(str(roi_path[0]))
-    mask_polygon = roi_to_shapely(roi)
-    filter_mask = shapely_to_mask(mask_polygon)
+      roi = read_roi_file(str(roi_path[0]))
+      mask_polygon = roi_to_shapely(roi)
+      filter_mask = shapely_to_mask(mask_polygon)
 
-    label_props = skimage.measure.regionprops(cell_mask, img)
+      label_props = skimage.measure.regionprops(cell_mask, img)
 
-    # calculate the mean intensity for each cell
-    means = np.asarray([d['intensity_mean'] for d in label_props])
-    # calculate thresh and filter dim cells
-    filter_thresh = activation_row.iloc[:,-6:].mean(axis=1).values[0] # average the 6 good/bad cells
-    n_pos_cells = (means > filter_thresh).sum() # positive cells. sum() only counts True value
-    n_total_cells = means.size
+      # calculate the mean intensity for each cell
+      means = np.asarray([d['intensity_mean'] for d in label_props])
+      # calculate thresh and filter dim cells
+      filter_thresh = activation_row.iloc[:,-6:].mean(axis=1).values[0] # average the 6 good/bad cells
+      n_pos_cells = (means > filter_thresh).sum() # positive cells. sum() only counts True value
+      n_total_cells = means.size
 
-    # filter out cells outside the masked region
+      # filter out cells outside the masked region
 
-    labels = np.asarray([d['label'] for d in label_props])
-    centroids = np.asarray([d['centroid'] for d in label_props])
-    # rounds the centroids then converts to int
-    centroids = np.round(centroids).astype(int)
-    # sees if the centroids are inside the masked area
-    masked_centroids = filter_mask[centroids[:,0],centroids[:,1]]
-    # matches the masked_centroids to their label_id
-    masked_cells = labels[masked_centroids]
-    # deletes the labels from the image that are outside the masked region
-    filtered_image = np.isin(cell_mask, masked_cells)*cell_mask
+      labels = np.asarray([d['label'] for d in label_props])
+      centroids = np.asarray([d['centroid'] for d in label_props])
+      # rounds the centroids then converts to int
+      centroids = np.round(centroids).astype(int)
+      # sees if the centroids are inside the masked area
+      masked_centroids = filter_mask[centroids[:,0],centroids[:,1]]
+      # matches the masked_centroids to their label_id
+      masked_cells = labels[masked_centroids]
+      # deletes the labels from the image that are outside the masked region
+      filtered_image = np.isin(cell_mask, masked_cells)*cell_mask
 
-    # save image of filtered cells
-    fig, ax = plt.subplots(nrows=1, ncols=1)
-    ax.imshow(filtered_image)
-    save_filename = sample + '_masked_cells.png'
-    fig.savefig(output_dir / save_filename)
-    plt.close(fig)
+      # save image of filtered cells
+      # fig, ax = plt.subplots(nrows=1, ncols=1)
+      # ax.imshow(filtered_image)
+      # save_filename = sample + '_masked_cells.png'
+      # fig.savefig(output_dir / save_filename)
+      # plt.close(fig)
 
-    # calculate number of masked and filtered cells
-    masked_means = means[masked_centroids]
-    n_pos_masked_cells = (masked_means > filter_thresh).sum() # positive cells. sum() only counts True value
-    n_total_masked_cells = masked_means.size
+      # calculate number of masked and filtered cells
+      masked_means = means[masked_centroids]
+      n_pos_masked_cells = (masked_means > filter_thresh).sum() # positive cells. sum() only counts True value
+      n_total_masked_cells = masked_means.size
 
-    # get all the info into the results table
-    result = []
-    result.append(activation_row.iloc[0]['filename'])
-    result.append(activation_row.iloc[0]['treatment'])
-    result.append(activation_row.iloc[0]['pathway'])
-    result.append(activation_row.iloc[0]['sample_id'])
-    result.append(activation_row.iloc[0]['section'])
-    result.append(activation_row.iloc[0]['sample_name'])
+      # get all the info into the results table
+      result = []
+      result.append(activation_row.iloc[0]['filename'])
+      result.append(activation_row.iloc[0]['treatment'])
+      result.append(activation_row.iloc[0]['pathway'])
+      result.append(activation_row.iloc[0]['sample_id'])
+      result.append(activation_row.iloc[0]['section'])
+      result.append(activation_row.iloc[0]['sample_name'])
 
-    # cell counts
-    result.append(filter_thresh)
-    result.append(n_total_cells)
-    result.append(n_pos_cells)
-    result.append(n_total_masked_cells)
-    result.append(n_pos_masked_cells)
+      # cell counts
+      result.append(filter_thresh)
+      result.append(n_total_cells)
+      result.append(n_pos_cells)
+      result.append(n_total_masked_cells)
+      result.append(n_pos_masked_cells)
 
-    results.append(result)
+      results.append(result)
 
 results_df = pd.DataFrame(results, columns = ['old_filename', 'treatment', 'pathway', 'sample_id', 'section', 'sample_name', 'thresh', 'total_cells', 'pos_cells', 'total_masked_cells', 'pos_masked_cells'])
 
