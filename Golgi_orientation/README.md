@@ -71,7 +71,7 @@ tissue (see image below, you can see the outline of the two z-stacks in the over
   'positional angle', which will be described more later. These rois are used to filter nuclei a certain distance from 
   the FNP ectoderm, similar but less subjective than the previous roi method. Note in the below plot of nuclei positions,
   the black are 200 um from the baseline, and the pink? salmon? ones are further. The ectoderm and neurectoderm nuclei
-  have already been removed before transformation so they do not appear in this graph (red dots in triptych above). A third 
+  have already been removed before transformation so they do not appear in this graph (red dots in diagram above). A third 
   landmark would help anchor the 'y' scale better, but it is not necessary for this analysis.
 ![overview image with octile rois](/Readme_images/overview_octile_filtered.png)
 

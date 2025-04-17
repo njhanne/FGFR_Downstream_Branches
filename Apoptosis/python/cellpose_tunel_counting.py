@@ -16,7 +16,7 @@ from DirFileHelpers.find_all_files import find_all_filepaths
 def import_roi(roi_file):
   # imports a '.roi' file, not a .zip file
   # needs to be a string and not a path
-  roi = read_roi_file(roi_file)
+  roi = read_roi_file(roi_file) # this is from read-roi package
   return roi
 
 
@@ -47,7 +47,7 @@ def freehand_roi_mask(mask_img, roi):
   # Get pixel values of freehand shape
   xvals = np.rint(roi['y']).astype(int)
   yvals = np.rint(roi['x']).astype(int)
-  freehand_coords = np.stack((xvals,yvals), axis=1).flatten()
+  freehand_coords = np.stack((xvals, yvals), axis=1).flatten()
   freehand_coords = np.roll(freehand_coords, 1)  # not sure why it leaves these hangers-on?
   test = ImageDraw.Draw(mask_img) # this draws the mask onto the mask_image - it automatically writes
   test.polygon(freehand_coords.tolist(), outline=1, fill=1)  # draws freehand shape and fills with 1's
@@ -110,8 +110,8 @@ for sample in sample_info['sample_side'].unique():
     # load the images and roi file
     nuc_img = cv2.imread(str(nuc_img_path[0]), -1) # https://docs.opencv.org/3.4/d8/d6a/group__imgcodecs__flags.html
     stain_img = cv2.imread(str(stain_img_path[0]), -1)
-    roi = import_roi(str(roi_path[0]))
-    roi = roi[roi_path[0].stem]
+    roi = import_roi(str(roi_path[0])) # import the roi as a dictionary
+    roi = roi[roi_path[0].stem] # get the roi out of the dictionary - usually there's only one, but this will get it out
 
     # create a mask from the roi drawing
     mask = roi_to_mask(roi)
@@ -137,7 +137,8 @@ for sample in sample_info['sample_side'].unique():
 
     results.append(result)
 
-results_df = pd.DataFrame(results, columns = ['old_filenames', 'new_filename', 'sample', 'treatment', 'side', 'section',  'mag', 'nuclei_count', 'tunel_count'])
+results_df = pd.DataFrame(results, columns = ['old_filenames', 'new_filename', 'sample', 'treatment', 'side', 'section',
+                                              'mag', 'nuclei_count', 'tunel_count'])
 
 ## save
 results_df.to_csv((data_dir / 'results.csv').resolve())
