@@ -6,7 +6,7 @@ Each directory contains the code needed to analyze a different outcome measure. 
 ![project overview image](/Readme_images/overview_fig_github.png)
 
 ## Getting the data
-TBD I need to figure out how the journal wants to host this. The file sizes are quite large. I also don't really want to put it up until we get it published on biorxiv...
+TBD I need to figure out how the journal wants to host this. The file sizes are quite large. I guess for now email me?
 
 ## Getting everything installed
 ### Setting up python
